@@ -18,7 +18,7 @@ func main() {
   e.Use(middleware.Recover())
 
   // Routes
-  e.GET("/", hello)
+  e.GET("/", welcome)
 
   // Start server
   if err := e.Start(":5001"); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -27,6 +27,6 @@ func main() {
 }
 
 // Handler
-func hello(c echo.Context) error {
+func welcome(c echo.Context) error {
   return c.String(http.StatusOK, "Welcome to Black Lotus!")
 }
