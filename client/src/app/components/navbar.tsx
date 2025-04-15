@@ -5,11 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 export function Navbar() {
-  const [isSticky, setIsSticky] = useState(false);
+  const [isSticky, setIsSticky] = useState(false); // handle navbar sticking to top
 
+  // on scroll navbar will stick and display additional info
   useEffect(() => {
     const handleScroll = () => {
-      setIsSticky(window.scrollY > 100); // better UX
+      setIsSticky(window.scrollY > 100);
     };
 
     window.addEventListener('scroll', handleScroll);
