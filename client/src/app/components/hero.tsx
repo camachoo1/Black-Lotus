@@ -18,7 +18,7 @@ export function Hero() {
           never happened just got easier to plan
         </motion.h1>
         <motion.h3
-          className='text-gray-500 custom-text text-sm p-2'
+          className='text-gray-500 custom-text text-sm p-2 mt-2'
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1, duration: 1 }}
@@ -29,7 +29,7 @@ export function Hero() {
         </motion.h3>
 
         <motion.button
-          className='hover:cursor-pointer custom-text text-lg focus:outline-none bg-cyan-400 hover:bg-cyan-500 rounded-full focus:ring-4 px-8 py-3.5 me-2 mb-2 font-bold text-white'
+          className='hover:cursor-pointer custom-text text-lg  bg-cyan-400 hover:bg-cyan-500 rounded-full  px-8 py-3.5 me-2 m-6 font-bold text-white'
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 1 }}
