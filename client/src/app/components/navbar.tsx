@@ -18,7 +18,9 @@ export function Navbar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 w-full z-50 bg-white transition-all duration-300 ${isSticky ? 'shadow' : 'shadow-none'}`}
+      className={`fixed top-0 left-0 w-full z-50 bg-white transition-all duration-300 ${
+        isSticky ? 'shadow' : 'shadow-none'
+      }`}
     >
       <div className='max-w-screen-xl mx-auto flex justify-between items-center px-6 py-4'>
         {/* LEFT: Logo */}
@@ -71,10 +73,10 @@ export function Navbar() {
 
         {/* RIGHT: Auth buttons */}
         <div className='flex space-x-2'>
-          <button className='text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900'>
+          <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900'>
             Login
           </button>
-          <button className='text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500'>
+          <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500'>
             Sign Up
           </button>
         </div>
