@@ -59,7 +59,7 @@ export function AuthModal({
           />
           <button
             type='submit'
-            className='bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2 rounded'
+            className='bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2 rounded hover:cursor-pointer'
           >
             {mode === 'login' ? 'Login' : 'Sign Up'}
           </button>
@@ -78,29 +78,29 @@ export function AuthModal({
         </p>
 
         {/* Divider */}
-        <div className='flex items-center gap-4 my-4'>
+        <div className='flex items-center gap-4 my-2'>
           <div className='h-px flex-1 bg-gray-200' />
           <span className='text-xs text-gray-400 uppercase'>or</span>
           <div className='h-px flex-1 bg-gray-200' />
         </div>
 
         {/* OAUTH BUTTONS */}
-        <div className='flex flex-col gap-2 mt-4'>
+        <div className='flex flex-col gap-2 mt-2'>
           <button
             onClick={() => handleOAuth('google')}
-            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition'
+            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >
             <FaGoogle /> Continue with Google
           </button>
           <button
             onClick={() => handleOAuth('github')}
-            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition'
+            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >
             <FaGithub /> Continue with GitHub
           </button>
           <button
             onClick={() => handleOAuth('apple')}
-            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition'
+            className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >
             <FaApple /> Continue with Apple
           </button>
