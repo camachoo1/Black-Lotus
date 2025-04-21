@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { AuthModal } from './Modals/auth';
 
 export function Navbar() {
   const [isSticky, setIsSticky] = useState(false); // handle navbar sticking to top
@@ -74,12 +75,17 @@ export function Navbar() {
 
         {/* RIGHT: Auth buttons */}
         <div className='flex space-x-2'>
-          <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900'>
-            Login
-          </button>
-          <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500'>
-            Sign Up
-          </button>
+          <AuthModal initialMode='login'>
+            <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900 hover:cursor-pointer'>
+              Login
+            </button>
+          </AuthModal>
+
+          <AuthModal initialMode='signup'>
+            <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500 hover:cursor-pointer'>
+              Sign Up
+            </button>
+          </AuthModal>
         </div>
       </div>
     </nav>
