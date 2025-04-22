@@ -36,7 +36,7 @@ export default function TripForm() {
           onBlur={() => setIsFocused(false)}
           onChange={(e) => setDestination(e.target.value)}
           placeholder=' ' // required for peer-placeholder-shown to work
-          className='peer w-full border rounded-lg px-4 py-3 pt-6 text-sm text-gray-900 placeholder-transparent font-medium'
+          className='custom-text peer w-full border rounded-lg px-4 py-3 pt-6 text-sm text-gray-900 placeholder-transparent font-medium'
         />
 
         {/* Floating label: animates to top left on focus or input */}
@@ -84,7 +84,7 @@ export default function TripForm() {
                 {/* Start date display */}
                 <div className='flex items-center gap-2'>
                   <FaCalendarAlt className='text-gray-500' />
-                  <span className='font-medium text-gray-900'>
+                  <span className='custom-text font-medium text-gray-900'>
                     {range?.from
                       ? format(range.from, 'MMMM d')
                       : 'Start date'}
@@ -97,7 +97,7 @@ export default function TripForm() {
                 {/* End date display */}
                 <div className='flex items-center gap-2'>
                   <FaCalendarAlt className='text-gray-500' />
-                  <span className='font-medium text-gray-900'>
+                  <span className='custom-text font-medium text-gray-900'>
                     {range?.to
                       ? format(range.to, 'MMMM d')
                       : 'End date'}
@@ -137,7 +137,7 @@ export default function TripForm() {
 
       {/* Invite option (additional CTA) */}
       <div className='flex justify-between text-sm text-gray-500'>
-        <button className='flex items-center gap-1 hover:underline'>
+        <button className='custom-text flex items-center gap-1 cursor-pointer'>
           <span>+</span>Invite Friends To Your Trip
         </button>
       </div>
