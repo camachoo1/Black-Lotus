@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import '../globals.css';
-
 
 import { FaCalendarAlt } from 'react-icons/fa';
 import { format } from 'date-fns';
@@ -41,7 +39,7 @@ export default function TripForm() {
       )}
 
       {/* DATE PICKER */}
-      <div className='flex gap-2 justify-between border rounded-lg px-4 py-3 text-left cursor-pointer'>
+      <div className='flex gap-2 justify-between border rounded-lg px-4 py-3 text-left'>
         <div className='flex flex-col gap-1 text-sm text-gray-700'>
           <label className='text-xs font-semibold text-gray-500 mb-1 block'>
             Dates (Optional)
@@ -50,39 +48,28 @@ export default function TripForm() {
             <PopoverTrigger asChild>
               <Button
                 variant='ghost'
-                className='px-0 py-0 h-auto text-left text-gray-600 hover:bg-transparent hover:cursor-pointer'
+                className='px-0 py-0 h-auto text-left text-gray-600 hover:bg-transparent'
               >
-                <div className='flex items-center gap-6'>
-                  {/* Start Date */}
-                  <div className='flex items-center gap-2'>
-                    <FaCalendarAlt className='text-gray-500' />
-                    <span className='font-medium text-gray-900'>
-                      {range?.from
-                        ? format(range.from, 'MMMM d')
-                        : 'Start date'}
-                    </span>
-                  </div>
-
-                  {/* Separator */}
-                  <div className='text-gray-300'>|</div>
-
-                  {/* End Date */}
-                  <div className='flex items-center gap-2'>
-                    <FaCalendarAlt className='text-gray-500' />
-                    <span className='font-medium text-gray-900'>
-                      {range?.to
-                        ? format(range.to, 'MMMM d')
-                        : 'End date'}
-                    </span>
-                  </div>
+                <div className='flex items-center gap-2 text-sm'>
+                  <FaCalendarAlt className='mr-2 h-4 w-4' />
+                  {range?.from && range?.to ? (
+                    <>
+                      {format(range.from, 'MMM d')} -{' '}
+                      {format(range.to, 'MMM d, yyyy')}
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Start date{' '}
+                        <span className='mx-1 text-gray-400'>|</span>
+                        End date
+                      </span>
+                    </>
+                  )}
                 </div>
               </Button>
             </PopoverTrigger>
-            <PopoverContent
-              className='w-auto p-0'
-              align='center'
-              sideOffset={8}
-            >
+            <PopoverContent className='w-auto p-0'>
               <Calendar
                 initialFocus
                 mode='range'

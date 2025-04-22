@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import "tw-animate-css";
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 .custom-text {
@@ -37,7 +37,9 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary-foreground: var(
+    --sidebar-primary-foreground
+  );
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
@@ -120,4 +122,13 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* DayPicker outside days (gray text instead of hidden) */
+
+.rdp-day_outside.rdp-day_range_middle,
+.rdp-day_outside.rdp-day_range_start,
+.rdp-day_outside.rdp-day_range_end {
+  background-color: transparent !important;
+  color: #d1d5db;
 }
