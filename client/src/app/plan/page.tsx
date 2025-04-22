@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import '../globals.css';
-
 
 import { FaCalendarAlt } from 'react-icons/fa';
 import { format } from 'date-fns';
@@ -89,6 +87,7 @@ export default function TripForm() {
                 selected={range}
                 onSelect={setRange}
                 numberOfMonths={2}
+                disabled={(date) => date <= new Date()}
               />
               <div className='p-2 text-right'>
                 <button

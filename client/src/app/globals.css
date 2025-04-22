@@ -124,11 +124,10 @@
   }
 }
 
-/* DayPicker outside days (gray text instead of hidden) */
-
-.rdp-day_outside.rdp-day_range_middle,
-.rdp-day_outside.rdp-day_range_start,
-.rdp-day_outside.rdp-day_range_end {
-  background-color: transparent !important;
-  color: #d1d5db;
+@layer utilities {
+  .rdp-day_outside.rdp-day_range_middle,
+  .rdp-day_outside.rdp-day_range_start,
+  .rdp-day_outside.rdp-day_range_end {
+    @apply bg-red-900 text-gray-300;
+  }
 }
