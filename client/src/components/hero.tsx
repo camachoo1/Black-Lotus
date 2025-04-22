@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 export function Hero() {
   return (
@@ -34,7 +35,7 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 1 }}
         >
-          Start Planning
+          <Link href='/plan'>Start Planning</Link>
         </motion.button>
       </div>
     </div>

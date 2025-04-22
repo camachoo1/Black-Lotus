@@ -24,14 +24,16 @@ export function AuthModal({
     setMode((prev) => (prev === 'login' ? 'signup' : 'login'));
   };
 
+  // THIS WILL CHANGE ONCE OAUTH IS SETUP
   const handleOAuth = (provider: 'google' | 'github' | 'apple') => {
     window.location.href = `/api/auth/${provider}`;
   };
 
   return (
+
+    // DIALOG IMPORTS FROM SHADCN TO HANDLE MODAL DESIGN
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
-
       <DialogContent className='sm:max-w-md'>
         <DialogHeader>
           <DialogTitle>
@@ -44,6 +46,7 @@ export function AuthModal({
           </DialogDescription>
         </DialogHeader>
 
+        {/* EMAIL & PASSWORD LOGIN FORM */}
         <form className='flex flex-col gap-3 mt-4'>
           <input
             type='email'

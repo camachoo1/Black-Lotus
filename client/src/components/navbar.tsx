@@ -4,9 +4,13 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AuthModal } from './Modals/auth';
+import { usePathname } from 'next/navigation';
 
 export function Navbar() {
   const [isSticky, setIsSticky] = useState(false); // handle navbar sticking to top
+  const pathname = usePathname();
+
+  const isHome = pathname === '/';
 
   // on scroll navbar will stick and display additional info
   useEffect(() => {
@@ -18,30 +22,34 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const showFullNav = !isHome || isSticky;
+
   return (
     <nav
       className={`fixed top-0 left-0 w-full z-50 bg-white transition-all duration-300 ${
-        isSticky ? 'shadow' : 'shadow-none'
+        showFullNav ? 'shadow' : 'shadow-none'
       }`}
     >
       <div className='max-w-screen-xl mx-auto flex justify-between items-center px-6 py-4'>
         {/* LEFT: Logo */}
-        <div className='flex items-center gap-2'>
-          <Image
-            src='/filled.svg'
-            alt='logo'
-            width={40}
-            height={40}
-          />
-          <h1 className='text-lg font-bold custom-text'>
-            Black Lotus
-          </h1>
-        </div>
+        <Link href='/'>
+          <div className='flex items-center gap-2'>
+            <Image
+              src='/filled.svg'
+              alt='logo'
+              width={40}
+              height={40}
+            />
+            <h1 className='text-lg font-bold custom-text'>
+              Black Lotus
+            </h1>
+          </div>
+        </Link>
 
         {/* CENTER: Links + Search */}
         <div
           className={`flex items-center justify-between gap-8 flex-grow mx-8 transition-all duration-500 ${
-            isSticky
+            showFullNav
               ? 'opacity-100 translate-y-0'
               : 'opacity-0 -translate-y-2 pointer-events-none'
           }`}
