@@ -3,19 +3,16 @@ package main
 import (
 	"log"
 	"time"
+	"os"
 
-	"black-lotus/internal/api"
-	"black-lotus/internal/db"
-	"black-lotus/internal/utils"
+	"black-lotus/api"
+	"black-lotus/db"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
-	// Load environment variables
-	utils.LoadEnv()
-
 	// Initialize database connection
 	if err := db.Initialize(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -42,7 +39,11 @@ func main() {
 	api.RegisterRoutes(e)
 
 	// Get port from environment
-	port := utils.GetEnvWithDefault("SERVER_PORT", "8080")
+	// Get port from environment or use default
+	port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	// Start server
 	log.Printf("Server starting on port %s", port)

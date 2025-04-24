@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"black-lotus/internal/db"
+	"black-lotus/db"
 
 	"github.com/labstack/echo/v4"
 )
