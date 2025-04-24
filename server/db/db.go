@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"time"
-
-	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
 // DB is the global database connection pool
