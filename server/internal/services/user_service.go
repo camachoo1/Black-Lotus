@@ -52,3 +52,20 @@ func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInp
     return user, nil
 }
 
+// LoginUser authenticates a user and returns the user if successful
+func (s *UserService) LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error) {
+    // Get user by email and password
+    user, err := s.userRepo.LoginUser(ctx, input)
+    if err != nil {
+        return nil, err
+    }
+    
+    // You could add additional checks here if needed
+    // For example, check if email is verified
+    if !user.EmailVerified {
+        // Decide whether to return an error or just a warning
+        // For now, we'll still allow login but you might want to change this
+    }
+    
+    return user, nil
+}
