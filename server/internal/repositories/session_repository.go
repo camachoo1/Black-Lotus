@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"time"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,10 +36,13 @@ func (r *SessionRepository) CreateSession(ctx context.Context, userID uuid.UUID,
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
+
+	 // Create a base64 token for the cookie
+  token := base64.StdEncoding.EncodeToString(tokenBytes)
 	
 	// Hash the token for storage
-	hash := sha256.Sum256(tokenBytes)
-	tokenHash := hex.EncodeToString(hash[:])
+	hash := sha256.Sum256([]byte(token))
+  tokenHash := hex.EncodeToString(hash[:])
 	
 	expiresAt := time.Now().Add(duration)
 	
@@ -57,6 +61,9 @@ func (r *SessionRepository) CreateSession(ctx context.Context, userID uuid.UUID,
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert session: %w", err)
 	}
+
+	// Save token in the session object
+  session.Token = token
 	
 	return &session, nil
 }
@@ -82,6 +89,33 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID uuid.U
 	}
 	
 	return &session, nil
+}
+
+// Add this to session_repository.go
+func (r *SessionRepository) GetSessionByToken(ctx context.Context, token string) (*models.Session, error) {
+    var session models.Session
+    
+    // Get token hash
+    hash := sha256.Sum256([]byte(token))
+    tokenHash := hex.EncodeToString(hash[:])
+    
+    // Query by token hash
+    err := r.db.QueryRow(ctx, `
+        SELECT id, user_id, expires_at, created_at
+        FROM sessions
+        WHERE token_hash = $1 AND expires_at > NOW()
+    `, tokenHash).Scan(
+        &session.ID,
+        &session.UserID,
+        &session.ExpiresAt,
+        &session.CreatedAt,
+    )
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return &session, nil
 }
 
 // DeleteSession removes a session from the database

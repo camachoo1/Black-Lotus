@@ -14,10 +14,6 @@ type UserService struct {
 	userRepo *repositories.UserRepository
 }
 
-func (s *UserService) GetUserByID(context context.Context, d uuid.UUID) (any, error) {
-	panic("unimplemented")
-}
-
 func NewUserService(userRepo *repositories.UserRepository) *UserService {
 	return &UserService{userRepo: userRepo}
 }
@@ -73,4 +69,16 @@ func (s *UserService) LoginUser(ctx context.Context, input models.LoginUserInput
 	}
 
 	return user, nil
+}
+
+func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) {
+    user, err := s.userRepo.GetUserByID(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Don't return the hashed password
+    user.HashedPassword = nil
+    
+    return user, nil
 }

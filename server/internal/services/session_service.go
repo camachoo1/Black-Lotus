@@ -35,6 +35,10 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID uuid.UUI
 	return s.sessionRepo.GetSessionByID(ctx, sessionID)
 }
 
+func (s *SessionService) ValidateSessionByToken(ctx context.Context, token string) (*models.Session, error) {
+    return s.sessionRepo.GetSessionByToken(ctx, token)
+}
+
 // EndSession terminates a specific session
 func (s *SessionService) EndSession(ctx context.Context, sessionID uuid.UUID) error {
 	return s.sessionRepo.DeleteSession(ctx, sessionID)
