@@ -130,7 +130,7 @@ func (c *UserController) LoginUser(ctx echo.Context) error {
 
     // Set secure HTTP-only cookie with session ID
     cookie := new(http.Cookie)
-    cookie.Name = "session_token" // Using token instead of ID for better security
+    cookie.Name = "session_id" // Using token instead of ID for better security
     cookie.Value = session.Token
     cookie.Expires = session.ExpiresAt
     cookie.Path = "/"
