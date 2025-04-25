@@ -67,3 +67,47 @@ func (c *UserController) RegisterUser(ctx echo.Context) error {
 	return ctx.JSON(http.StatusCreated, user)
 }
 
+func (c *UserController) LoginUser(ctx echo.Context) error {
+    var input models.LoginUserInput
+    
+    if err := ctx.Bind(&input); err != nil {
+        return ctx.JSON(http.StatusBadRequest, map[string]string{
+            "error": "Invalid request body",
+        })
+    }
+    
+    if err := c.validator.Struct(input); err != nil {
+        // This will correctly validate email format
+        validationErrors := err.(validator.ValidationErrors)
+        errorMessages := make(map[string]string)
+        
+        for _, e := range validationErrors {
+            fieldName := e.Field()
+            switch e.Tag() {
+            case "required":
+                errorMessages[fieldName] = fieldName + " is required"
+            case "email":
+                errorMessages[fieldName] = fieldName + " must be a valid email address"
+            default:
+                errorMessages[fieldName] = fieldName + " is invalid"
+            }
+        }
+        
+        return ctx.JSON(http.StatusBadRequest, map[string]string{
+            "error": fmt.Sprintf("Validation failed: %v", errorMessages),
+        })
+    }
+    
+    user, err := c.userService.LoginUser(ctx.Request().Context(), input)
+    if err != nil {
+        // generic error message for security
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Invalid email or password",
+        })
+    }
+    
+    // 1. Create a new session
+    // 2. Set a cookie or return a token
+    
+    return ctx.JSON(http.StatusOK, user)
+}
