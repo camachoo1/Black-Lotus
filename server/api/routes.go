@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/labstack/echo/v4"
-	
+
 	"black-lotus/api/controllers"
 	"black-lotus/db"
 	"black-lotus/internal/repositories"
@@ -12,16 +12,19 @@ import (
 func AuthRoutes(e *echo.Echo) {
 	// Create repositories
 	userRepo := repositories.NewUserRepository(db.DB)
+	sessionRepo := repositories.NewSessionRepository(db.DB)
 	
 	// Create services
 	userService := services.NewUserService(userRepo)
+	sessionService := services.NewSessionService(sessionRepo) 
 	
 	// Create controllers
-	userController := controllers.NewUserController(userService)
+	userController := controllers.NewUserController(userService, sessionService)
 	
 	// Public routes
 	e.POST("/api/signup", userController.RegisterUser)
 	e.POST("/api/login", userController.LoginUser)
+	e.POST("/api/logout", userController.LogoutUser)
 	
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {

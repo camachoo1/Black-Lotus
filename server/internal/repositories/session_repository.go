@@ -2,11 +2,15 @@ package repositories
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"time"
-	
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	
+
 	"black-lotus/internal/models"
 )
 
@@ -20,18 +24,30 @@ func NewSessionRepository(db *pgxpool.Pool) *SessionRepository {
 	return &SessionRepository{db: db}
 }
 
-// CreateSession stores a new session in the database with specified duration
+
+// CreateSession stores a new session in the database
+// Generates a secure token hash to prevent session hijacking
 func (r *SessionRepository) CreateSession(ctx context.Context, userID uuid.UUID, duration time.Duration) (*models.Session, error) {
 	var session models.Session
 	
+	// Generate a random token for the session
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+	
+	// Hash the token for storage
+	hash := sha256.Sum256(tokenBytes)
+	tokenHash := hex.EncodeToString(hash[:])
+	
 	expiresAt := time.Now().Add(duration)
 	
-	// Insert new session record and return the created session
+	// Use the token_hash in the SQL query
 	err := r.db.QueryRow(ctx, `
-		INSERT INTO sessions (user_id, expires_at)
-		VALUES ($1, $2)
+		INSERT INTO sessions (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
 		RETURNING id, user_id, expires_at, created_at
-	`, userID, expiresAt).Scan(
+	`, userID, tokenHash, expiresAt).Scan(
 		&session.ID,
 		&session.UserID,
 		&session.ExpiresAt,
@@ -39,7 +55,7 @@ func (r *SessionRepository) CreateSession(ctx context.Context, userID uuid.UUID,
 	)
 	
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to insert session: %w", err)
 	}
 	
 	return &session, nil
