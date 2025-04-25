@@ -21,9 +21,7 @@ func AuthRoutes(e *echo.Echo) {
 	
 	// Public routes
 	e.POST("/api/signup", userController.RegisterUser)
-
-	// Public Routes
-	
+	e.POST("/api/login", userController.LoginUser)
 	
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
