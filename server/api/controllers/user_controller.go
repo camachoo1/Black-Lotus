@@ -79,7 +79,7 @@ func (c *UserController) RegisterUser(ctx echo.Context) error {
     } else {
         // Set secure cookie with session ID
         cookie := new(http.Cookie)
-        cookie.Name = "session_id"
+        cookie.Name = "session_token"
         cookie.Value = session.ID.String()
         cookie.Expires = session.ExpiresAt
         cookie.Path = "/"
@@ -130,7 +130,7 @@ func (c *UserController) LoginUser(ctx echo.Context) error {
 
     // Set secure HTTP-only cookie with session ID
     cookie := new(http.Cookie)
-    cookie.Name = "session_id" // Using token instead of ID for better security
+    cookie.Name = "session_token" // Using token instead of ID for better security
     cookie.Value = session.Token
     cookie.Expires = session.ExpiresAt
     cookie.Path = "/"
@@ -145,7 +145,7 @@ func (c *UserController) LoginUser(ctx echo.Context) error {
 
 // LogoutUser ends the current user session
 func (c *UserController) LogoutUser(ctx echo.Context) error {
-	cookie, err := ctx.Cookie("session_id")
+	cookie, err := ctx.Cookie("session_token")
 	if err != nil {
 		return ctx.JSON(http.StatusOK, map[string]string{
 			"message": "Already logged out",
