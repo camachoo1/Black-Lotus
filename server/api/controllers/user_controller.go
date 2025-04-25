@@ -1,11 +1,14 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
-	
-	"github.com/labstack/echo/v4"
+	"reflect"
+	"strings"
+
 	"github.com/go-playground/validator/v10"
-	
+	"github.com/labstack/echo/v4"
+
 	"black-lotus/internal/models"
 	"black-lotus/internal/services"
 )
@@ -14,12 +17,22 @@ type UserController struct {
 	userService *services.UserService
 	validator   *validator.Validate
 }
-
 func NewUserController(userService *services.UserService) *UserController {
-	return &UserController{
-		userService: userService,
-		validator:   validator.New(),
-	}
+    validate := validator.New()
+    
+    // This is critical - register struct-level validation
+    validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+        name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+        if name == "-" {
+            return ""
+        }
+        return name
+    })
+    
+    return &UserController{
+        userService: userService,
+        validator:   validate,
+    }
 }
 
 func (c *UserController) RegisterUser(ctx echo.Context) error {
@@ -53,3 +66,4 @@ func (c *UserController) RegisterUser(ctx echo.Context) error {
 	
 	return ctx.JSON(http.StatusCreated, user)
 }
+

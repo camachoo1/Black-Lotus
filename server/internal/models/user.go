@@ -21,3 +21,8 @@ type CreateUserInput struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password *string `json:"password" validate:"omitempty,min=8"`
 }
+
+type LoginUserInput struct {
+	Email 	string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}

@@ -9,7 +9,7 @@ import (
 	"black-lotus/internal/services"
 )
 
-func RegisterRoutes(e *echo.Echo) {
+func AuthRoutes(e *echo.Echo) {
 	// Create repositories
 	userRepo := repositories.NewUserRepository(db.DB)
 	
@@ -20,7 +20,10 @@ func RegisterRoutes(e *echo.Echo) {
 	userController := controllers.NewUserController(userService)
 	
 	// Public routes
-	e.POST("/api/users", userController.RegisterUser)
+	e.POST("/api/signup", userController.RegisterUser)
+
+	// Public Routes
+	
 	
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {

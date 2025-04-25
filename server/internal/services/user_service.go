@@ -51,3 +51,4 @@ func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInp
     
     return user, nil
 }
+

@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 
 	"black-lotus/internal/models"
 )
@@ -68,3 +69,4 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	
 	return &user, nil
 }
+
