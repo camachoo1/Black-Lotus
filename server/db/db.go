@@ -50,53 +50,60 @@ func Close() {
 // initSchema creates database tables if they don't exist
 func initSchema() error {
     _, err := DB.Exec(context.Background(), `
+        -- Enable UUID extension if not already enabled
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        
+        -- Users table
         CREATE TABLE IF NOT EXISTS users (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             name VARCHAR(100) NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
-            hashed_password VARCHAR(255),
-            email_verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            hashed_password VARCHAR(255) DEFAULT NULL,
+            email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
-
+        
+        -- OAuth accounts table
         CREATE TABLE IF NOT EXISTS oauth_accounts (
             provider_id VARCHAR(100) NOT NULL,
             provider_user_id VARCHAR(100) NOT NULL,
             user_id UUID NOT NULL,
             access_token TEXT NOT NULL,
-            refresh_token TEXT,
-            expires_at TIMESTAMP WITH TIME ZONE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            refresh_token TEXT DEFAULT NULL,
+            expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (provider_id, provider_user_id),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
-        -- Create index on user_id for faster lookups
-        CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
-
+        
+        -- Sessions table
         CREATE TABLE IF NOT EXISTS sessions (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             user_id UUID NOT NULL,
-            token_hash VARCHAR(255) NOT NULL,
             expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
-        -- Create index on expires_at for faster cleanup
-        CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-        -- Create index on token_hash for faster lookups
-        CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
-
+        
+        -- Email verification table
         CREATE TABLE IF NOT EXISTS email_verifications (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             code VARCHAR(100) NOT NULL,
             user_id UUID NOT NULL UNIQUE,
-            expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
-        -- Create index on expires_at for faster cleanup
+        
+        -- Create indexes for better performance
+        CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_email_verifications_expires_at ON email_verifications(expires_at);
     `)
+    
     return err
 }
 

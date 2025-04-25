@@ -17,6 +17,7 @@ func main() {
 	if err := db.Initialize(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	
 	defer db.Close()
 	log.Println("Successfully connected to PostgreSQL")
 
@@ -36,9 +37,8 @@ func main() {
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(20))) // 20 requests per second
 
 	// Setup routes
-	api.RegisterRoutes(e)
+	api.AuthRoutes(e)
 
-	// Get port from environment
 	// Get port from environment or use default
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
