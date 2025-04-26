@@ -170,3 +170,10 @@ func (c *UserController) LogoutUser(ctx echo.Context) error {
 		"message": "Successfully logged out",
 	})
 }
+
+func (c *UserController) GetUserProfile(ctx echo.Context) error {
+	// Get user from context (set by auth middleware)
+	user := ctx.Get("user").(*models.User)
+	
+	return ctx.JSON(http.StatusOK, user)
+}
