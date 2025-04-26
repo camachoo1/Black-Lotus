@@ -130,3 +130,14 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	
 	return &user, nil
 }
+
+// Changing verified email to true - used for oauth (will implement verification email later)
+func (r *UserRepository) SetEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE users 
+		SET email_verified = $1, updated_at = CURRENT_TIMESTAMP 
+		WHERE id = $2
+	`, verified, userID)
+	
+	return err
+}
