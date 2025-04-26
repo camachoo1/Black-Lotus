@@ -37,6 +37,12 @@ type githubUserResponse struct {
 	AvatarURL string `json:"avatar_url"`
 }
 
+type githubEmail struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
+}
+
 // Google OAuth responses
 type googleTokenResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -157,12 +163,6 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 			return nil, fmt.Errorf("failed to get user emails: %w", err)
 		}
 		defer resp.Body.Close()
-
-		type githubEmail struct {
-			Email    string `json:"email"`
-			Primary  bool   `json:"primary"`
-			Verified bool   `json:"verified"`
-		}
 
 		var emails []githubEmail
 		if err := json.NewDecoder(resp.Body).Decode(&emails); err != nil {

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,7 +21,6 @@ func NewOAuthRepository(db *pgxpool.Pool) *OAuthRepository {
 
 // CreateOAuthAccount creates or updates an OAuth account
 func (r *OAuthRepository) CreateOAuthAccount(ctx context.Context, account models.OAuthAccount) error {
-	fmt.Println("DEBUG: Creating/updating OAuth account for user:", account.UserID)
 	// Use upsert to handle both new accounts and reconnecting existing ones
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO oauth_accounts (
@@ -46,7 +44,6 @@ func (r *OAuthRepository) CreateOAuthAccount(ctx context.Context, account models
 func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, providerUserID string) (*models.OAuthAccount, error) {
 	var account models.OAuthAccount
 
-	fmt.Println("DEBUG: Looking for OAuth account", providerID, providerUserID)
 	err := r.db.QueryRow(ctx, `
 		SELECT provider_id, provider_user_id, user_id, 
 			access_token, refresh_token, expires_at, created_at, updated_at
@@ -64,11 +61,9 @@ func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, provi
 	)
 
 	if err != nil {
-		fmt.Println("DEBUG: Error getting OAuth account:", err)
 		return nil, err
 	}
 
-	fmt.Println("DEBUG: Found OAuth account for user ID:", account.UserID)
 	return &account, nil
 }
 
