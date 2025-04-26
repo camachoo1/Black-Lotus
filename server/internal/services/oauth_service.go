@@ -1,4 +1,3 @@
-// internal/services/oauth_service.go
 package services
 
 import (
@@ -21,6 +20,40 @@ type OAuthService struct {
 	oauthRepo  *repositories.OAuthRepository
 	userRepo   *repositories.UserRepository
 	httpClient *http.Client
+}
+
+// GItHub OAuth responses
+type githubTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	Scope       string `json:"scope"`
+}
+
+type githubUserResponse struct {
+	ID        int    `json:"id"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// Google OAuth responses
+type googleTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	IDToken      string `json:"id_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresIn    int    `json:"expires_in"`
+	TokenType    string `json:"token_type"`
+}
+
+type googleUserResponse struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+	Name          string `json:"name"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Picture       string `json:"picture"`
 }
 
 // NewOAuthService creates a new OAuth service
@@ -55,21 +88,6 @@ func (s *OAuthService) GetAuthorizationURL(provider string, redirectURI string) 
 	}
 }
 
-// GitHub OAuth responses
-type githubTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	Scope       string `json:"scope"`
-}
-
-type githubUserResponse struct {
-	ID        int    `json:"id"`
-	Login     string `json:"login"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	AvatarURL string `json:"avatar_url"`
-}
-
 // AuthenticateGitHub handles GitHub OAuth authentication
 func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*models.User, error) {
 	// Exchange code for token
@@ -83,13 +101,16 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
+
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := s.httpClient.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
 	}
+
 	defer resp.Body.Close()
 
 	var tokenResp githubTokenResponse
@@ -100,16 +121,20 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	// Get user info
 	userURL := "https://api.github.com/user"
 	req, err = http.NewRequestWithContext(ctx, "GET", userURL, nil)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user info request: %w", err)
 	}
+
 	req.Header.Set("Authorization", "token "+tokenResp.AccessToken)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err = s.httpClient.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
+	
 	defer resp.Body.Close()
 
 	var userResp githubUserResponse
@@ -185,16 +210,21 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	// Check if user with this email exists
 	user, err := s.userRepo.GetUserByEmail(ctx, userResp.Email)
 	if err != nil {
-		// Create new user
+		return nil, fmt.Errorf("failed to check for existing user: %w", err)
+	}
+
+	// If user is nil, create a new one
+	if user == nil {
 		input := models.CreateUserInput{
 			Name:  userResp.Name,
 			Email: userResp.Email,
 		}
+			
 		user, err = s.userRepo.CreateUser(ctx, input, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
-	}
+	} 
 
 	// Create OAuth account
 	oauthAccount := models.OAuthAccount{
@@ -222,24 +252,7 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	return user, nil
 }
 
-// Google OAuth responses
-type googleTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	IDToken      string `json:"id_token"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
-}
 
-type googleUserResponse struct {
-	ID            string `json:"id"`
-	Email         string `json:"email"`
-	VerifiedEmail bool   `json:"verified_email"`
-	Name          string `json:"name"`
-	GivenName     string `json:"given_name"`
-	FamilyName    string `json:"family_name"`
-	Picture       string `json:"picture"`
-}
 
 // AuthenticateGoogle handles Google OAuth authentication
 func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redirectURI string) (*models.User, error) {
@@ -253,19 +266,24 @@ func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redi
 	data.Set("grant_type", "authorization_code")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data.Encode()))
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := s.httpClient.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
 	}
+
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	var tokenResp googleTokenResponse
+
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
@@ -273,18 +291,23 @@ func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redi
 	// Get user info
 	userURL := "https://www.googleapis.com/oauth2/v1/userinfo"
 	req, err = http.NewRequestWithContext(ctx, "GET", userURL, nil)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user info request: %w", err)
 	}
+
 	req.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
 
 	resp, err = s.httpClient.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
+
 	defer resp.Body.Close()
 
 	var userResp googleUserResponse
+
 	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
 		return nil, fmt.Errorf("failed to parse user response: %w", err)
 	}
@@ -314,7 +337,11 @@ func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redi
 	// Check if user with this email exists
 	user, err := s.userRepo.GetUserByEmail(ctx, userResp.Email)
 	if err != nil {
-		// Create new user
+		return nil, fmt.Errorf("failed to check for existing user: %w", err)
+	}
+
+	// If user is nil, create a new one
+	if user == nil {
 		input := models.CreateUserInput{
 			Name:  userResp.Name,
 			Email: userResp.Email,

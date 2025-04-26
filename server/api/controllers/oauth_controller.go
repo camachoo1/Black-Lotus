@@ -1,4 +1,3 @@
-// api/controllers/oauth_controller.go
 package controllers
 
 import (
