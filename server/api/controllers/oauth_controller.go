@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/labstack/echo/v4"
 
@@ -24,10 +26,16 @@ func NewOAuthController(oauthService *services.OAuthService, sessionService *ser
 
 // GetGitHubAuthURL returns the GitHub OAuth URL
 func (c *OAuthController) GetGitHubAuthURL(ctx echo.Context) error {
+	returnTo := ctx.QueryParam("returnTo")
+
+	if returnTo == "" {
+			returnTo = "/" // Default to home if not specified
+	}
 	// Get base URL from request for redirect
 	scheme := ctx.Scheme()
 	host := ctx.Request().Host
-	redirectURI := scheme + "://" + host + "/api/auth/github/callback"
+	redirectURI := fmt.Sprintf("%s://%s/api/auth/github/callback?returnTo=%s", 
+    scheme, host, url.QueryEscape(returnTo))
 	
 	authURL := c.oauthService.GetAuthorizationURL("github", redirectURI)
 	
@@ -61,6 +69,12 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 			"error": "Failed to create session",
 		})
 	}
+
+	// Get returnTo from query params
+	returnTo := ctx.QueryParam("returnTo")
+	if returnTo == "" {
+			returnTo = "/" // Default to home
+	}
 	
 	// Set cookie
 	cookie := new(http.Cookie)
@@ -75,7 +89,7 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 	ctx.SetCookie(cookie)
 	
 	// Redirect to frontend
-	return ctx.Redirect(http.StatusTemporaryRedirect, "/")
+	return ctx.Redirect(http.StatusTemporaryRedirect, returnTo)
 }
 
 // GetGoogleAuthURL returns the Google OAuth URL

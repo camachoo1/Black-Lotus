@@ -172,8 +172,29 @@ func (c *UserController) LogoutUser(ctx echo.Context) error {
 }
 
 func (c *UserController) GetUserProfile(ctx echo.Context) error {
-	// Get user from context (set by auth middleware)
-	user := ctx.Get("user").(*models.User)
-	
-	return ctx.JSON(http.StatusOK, user)
+    // Get session from cookie
+    cookie, err := ctx.Cookie("session_token")
+    if err != nil {
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Not authenticated",
+        })
+    }
+    
+    // Validate session
+    session, err := c.sessionService.ValidateSessionByToken(ctx.Request().Context(), cookie.Value)
+    if err != nil {
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Invalid session",
+        })
+    }
+    
+    // Get user from session
+    user, err := c.userService.GetUserByID(ctx.Request().Context(), session.UserID)
+    if err != nil {
+        return ctx.JSON(http.StatusInternalServerError, map[string]string{
+            "error": "Failed to get user",
+        })
+    }
+    
+    return ctx.JSON(http.StatusOK, user)
 }
