@@ -14,7 +14,7 @@ export async function GET() {
       );
     }
 
-    // Forward the request to your Go backend with the session token
+    // Forward the request to Go backend with the session token
     const response = await fetch(
       'http://localhost:8080/api/profile',
       {

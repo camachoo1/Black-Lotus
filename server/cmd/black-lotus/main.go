@@ -38,6 +38,13 @@ func main() {
         AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
         AllowCredentials: true, // This is crucial for sending cookies
     }))
+	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
+				TokenLookup:    "header:X-CSRF-Token",
+				CookieName:     "csrf_token",
+				CookiePath:     "/",
+				CookieHTTPOnly: false,
+				CookieMaxAge:   3600,  // 1 hour
+		}))
 	
 	// Rate limiting to prevent abuse
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(20))) // 20 requests per second
