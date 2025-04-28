@@ -160,7 +160,7 @@ func (c *UserController) LogoutUser(ctx echo.Context) error {
 	
     // Make sure to always clear the cookie, even if session delete fails
 	cookie = new(http.Cookie)
-	cookie.Name = "session_id"
+	cookie.Name = "session_token"
 	cookie.Value = ""
 	cookie.MaxAge = -1  // Expire immediately
 	cookie.Path = "/"

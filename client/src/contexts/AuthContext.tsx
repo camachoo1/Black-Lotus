@@ -1,8 +1,9 @@
-// contexts/AuthContext.tsx
-'use client';
-
-import React, { createContext, useContext } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext, ReactNode } from 'react';
+import {
+  useQueryClient,
+  useMutation,
+} from '@tanstack/react-query';
+import { useAuthCheck } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -28,28 +29,22 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) => {
   const queryClient = useQueryClient();
+  const { data: user, isLoading } = useAuthCheck();
 
-  // Use TanStack Query to fetch and cache the user profile
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['authUser'],
-    queryFn: async () => {
-      const response = await fetch('/api/profile', {
-        credentials: 'include', // Important for cookies
+  // Logout mutation
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include',
       });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          return null;
-        }
-        throw new Error('Failed to fetch user');
-      }
-
-      return response.json();
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    onSuccess: () => {
+      queryClient.setQueryData(['authUser'], null);
+    },
   });
 
   const refreshUser = () => {
@@ -57,21 +52,13 @@ export const AuthProvider = ({
   };
 
   const logout = async () => {
-    try {
-      await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      queryClient.setQueryData(['authUser'], null);
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+    await logoutMutation.mutateAsync();
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user: user || null,
+        user: user ?? null,
         isLoading,
         logout,
         refreshUser,

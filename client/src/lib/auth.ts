@@ -1,4 +1,3 @@
-// lib/auth.ts
 import { useQuery } from '@tanstack/react-query';
 
 export const useAuthCheck = () => {
