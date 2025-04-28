@@ -22,6 +22,7 @@ export async function GET() {
         headers: {
           Cookie: `session_token=${sessionToken.value}`,
         },
+        credentials: 'include'
       }
     );
 
