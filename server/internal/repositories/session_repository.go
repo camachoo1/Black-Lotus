@@ -137,3 +137,16 @@ func (r *SessionRepository) DeleteUserSessions(ctx context.Context, userID uuid.
 	
 	return err
 }
+
+func (r *SessionRepository) DeleteSessionByToken(ctx context.Context, token string) error {
+    // Hash the token first
+    hash := sha256.Sum256([]byte(token))
+    tokenHash := hex.EncodeToString(hash[:])
+    
+    // Delete using the token hash
+    _, err := r.db.Exec(ctx, `
+        DELETE FROM sessions
+        WHERE token_hash = $1
+    `, tokenHash)
+    return err
+}

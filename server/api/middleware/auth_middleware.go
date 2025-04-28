@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -27,6 +28,9 @@ func NewAuthMiddleware(sessionService *services.SessionService, userService *ser
 func (m *AuthMiddleware) Authenticate(next echo.HandlerFunc) echo.HandlerFunc {
   return func(c echo.Context) error {
         // Extract session cookie
+
+        fmt.Println("Request headers:", c.Request().Header)
+        fmt.Println("Request cookies:", c.Request().Cookies())
         cookie, err := c.Cookie("session_token")
         if err != nil {
             return c.JSON(http.StatusUnauthorized, map[string]string{

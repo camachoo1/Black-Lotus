@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"black-lotus/internal/models"
@@ -77,13 +76,15 @@ func (c *UserController) RegisterUser(ctx echo.Context) error {
         // We'll still return success but log the error
         log.Printf("Failed to create session for new user: %v", err)
     } else {
-        // Set secure cookie with session ID
+        // Set secure cookie with session token
         cookie := new(http.Cookie)
         cookie.Name = "session_token"
-        cookie.Value = session.ID.String()
+        cookie.Value = session.Token
         cookie.Expires = session.ExpiresAt
         cookie.Path = "/"
         cookie.HttpOnly = true  // Prevents JavaScript access
+        // WILL ADD BACK IN FOR PRODUCTION
+
         cookie.Secure = true    // Requires HTTPS
         cookie.SameSite = http.SameSiteStrictMode  // Prevents CSRF attacks
         
@@ -135,6 +136,8 @@ func (c *UserController) LoginUser(ctx echo.Context) error {
     cookie.Expires = session.ExpiresAt
     cookie.Path = "/"
     cookie.HttpOnly = true // Used to prevent Javascript access
+
+    // WILL ADD BACK IN FOR PRODUCTION
     cookie.Secure = true
     cookie.SameSite = http.SameSiteStrictMode // Prevents CSRF attacks
 
@@ -152,11 +155,12 @@ func (c *UserController) LogoutUser(ctx echo.Context) error {
 		})
 	}
 	
-	sessionID, err := uuid.Parse(cookie.Value)
-	if err == nil {
-        // Delete the session from database
-		_ = c.sessionService.EndSession(ctx.Request().Context(), sessionID)
-	}
+	 // Delete the session using the token directly
+    err = c.sessionService.EndSessionByToken(ctx.Request().Context(), cookie.Value)
+    if err != nil {
+        // Log the error but still clear the cookie
+        log.Printf("Failed to end session: %v", err)
+    }
 	
     // Make sure to always clear the cookie, even if session delete fails
 	cookie = new(http.Cookie)

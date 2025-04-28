@@ -48,3 +48,8 @@ func (s *SessionService) EndSession(ctx context.Context, sessionID uuid.UUID) er
 func (s *SessionService) EndAllUserSessions(ctx context.Context, userID uuid.UUID) error {
 	return s.sessionRepo.DeleteUserSessions(ctx, userID)
 }
+
+// EndSessionByToken terminates a session by its token
+func (s *SessionService) EndSessionByToken(ctx context.Context, token string) error {
+    return s.sessionRepo.DeleteSessionByToken(ctx, token)
+}
