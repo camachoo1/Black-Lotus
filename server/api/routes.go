@@ -32,6 +32,7 @@ func AuthRoutes(e *echo.Echo) {
 	e.POST("/api/signup", userController.RegisterUser)
 	e.POST("/api/login", userController.LoginUser)
 	e.POST("/api/logout", userController.LogoutUser)
+	e.GET ("/api/csrf-token", userController.GetCSRFToken)
 
 		// OAuth Routes
 	e.GET("/api/auth/github", oauthController.GetGitHubAuthURL)

@@ -33,7 +33,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-        AllowOrigins:     []string{"http://localhost:3000"}, // Your frontend URL
+        AllowOrigins:     []string{"http://localhost:3000"},
         AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
         AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
         AllowCredentials: true, // This is crucial for sending cookies

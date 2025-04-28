@@ -202,3 +202,11 @@ func (c *UserController) GetUserProfile(ctx echo.Context) error {
     
     return ctx.JSON(http.StatusOK, user)
 }
+
+func (c *UserController) GetCSRFToken(ctx echo.Context) error {
+    token := ctx.Get("csrf").(string)
+    
+    return ctx.JSON(http.StatusOK, map[string]string{
+        "csrf_token": token,
+    })
+}
