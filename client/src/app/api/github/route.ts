@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { redirect } from 'next/navigation';
 
 export async function GET(request: Request) {
   try {
@@ -19,10 +19,12 @@ export async function GET(request: Request) {
     const data = await response.json();
 
     // Directly redirect the user to GitHub instead of returning JSON
-    return NextResponse.redirect(data.url);
+    return redirect(data.url);
   } catch (error) {
     console.error('GitHub auth error:', error);
-    // If something goes wrong, redirect to an error page
-    return NextResponse.redirect(new URL('/auth/error', request.url));
+    return Response.json(
+      { error: 'Failed to start GitHub authentication' },
+      { status: 500 }
+    );
   }
 }
