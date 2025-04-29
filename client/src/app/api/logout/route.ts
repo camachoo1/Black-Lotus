@@ -3,43 +3,63 @@ import { cookies } from 'next/headers';
 
 export async function POST() {
   try {
-    // Get both tokens from cookies
+    // Get the access_token and refresh_token from cookies
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('access_token');
     const refreshToken = cookieStore.get('refresh_token');
+    const csrfToken = cookieStore.get('csrf_token');
 
-    // Forward the request to your Go backend with the tokens
-    if (accessToken || refreshToken) {
-      const cookieHeader = [];
+    // Prepare headers for backend request
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
 
-      if (accessToken) {
-        cookieHeader.push(`access_token=${accessToken.value}`);
-      }
+    // Add CSRF token if available
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken.value;
+    }
 
-      if (refreshToken) {
-        cookieHeader.push(`refresh_token=${refreshToken.value}`);
-      }
+    // Prepare cookie header
+    const cookieHeader: string[] = [];
+    if (accessToken)
+      cookieHeader.push(`access_token=${accessToken.value}`);
+    if (refreshToken)
+      cookieHeader.push(`refresh_token=${refreshToken.value}`);
+    if (cookieHeader.length > 0) {
+      headers['Cookie'] = cookieHeader.join('; ');
+    }
 
-      await fetch('http://localhost:8080/api/logout', {
+    // Forward the request to the backend
+    const backendRes = await fetch(
+      'http://localhost:8080/api/logout',
+      {
         method: 'POST',
-        headers: {
-          Cookie: cookieHeader.join('; '),
-        },
+        headers,
+      }
+    );
+
+    if (!backendRes.ok) {
+      console.error(
+        'Backend Logout Failed:',
+        await backendRes.text()
+      );
+      return NextResponse.json({
+        error: 'Logout failed on the backend',
       });
     }
 
-    // Clear the cookies
-    const response = NextResponse.json({
-      message: 'Logged out successfully',
-    });
+    // Create the response
+    const nextResponse = NextResponse.json(
+      { message: 'Logged out successfully' },
+      { status: 200 }
+    );
 
-    // Clear access token cookie
-    response.cookies.delete('access_token');
+    // Clear cookies on the frontend
+    nextResponse.cookies.delete('access_token');
+    nextResponse.cookies.delete('refresh_token');
+    nextResponse.cookies.delete('csrf_token');
 
-    // Clear refresh token cookie
-    response.cookies.delete('refresh_token');
-
-    return response;
+    return nextResponse;
   } catch (error) {
     console.error('Logout error:', error);
     return NextResponse.json(
