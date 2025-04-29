@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"black-lotus/internal/services"
-	"fmt"
+
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -25,10 +25,6 @@ func NewAuthMiddleware(sessionService *services.SessionService, userService *ser
 // Authenticate checks for a valid access token before allowing access to protected routes
 func (m *AuthMiddleware) Authenticate(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
-        // Debug info
-        fmt.Println("Request headers:", c.Request().Header)
-        fmt.Println("Request cookies:", c.Request().Cookies())
-        
         // Extract access token cookie
         accessCookie, err := c.Cookie("access_token")
         if err != nil {
