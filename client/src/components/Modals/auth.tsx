@@ -79,7 +79,12 @@ export function AuthModal({
   // THIS WILL CHANGE ONCE OAUTH IS SETUP
   const handleOAuth = (provider: 'google' | 'github' | 'apple') => {
     const returnTo = encodeURIComponent(window.location.pathname);
-    window.location.href = `/api/auth/${provider}?returnTo=${returnTo}`;
+    
+    if (provider === 'github') {
+      window.location.href = `/auth/github?returnTo=${returnTo}`;
+    } else {
+      window.location.href = `/api/auth/${provider}?returnTo=${returnTo}`;
+    }
   };
 
   // Handles the submit logic

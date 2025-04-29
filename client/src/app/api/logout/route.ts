@@ -3,63 +3,37 @@ import { cookies } from 'next/headers';
 
 export async function POST() {
   try {
-    // Get the access_token and refresh_token from cookies
+    // Get cookies
     const cookieStore = await cookies();
-    const accessToken = cookieStore.get('access_token');
-    const refreshToken = cookieStore.get('refresh_token');
-    const csrfToken = cookieStore.get('csrf_token');
+    const csrfToken = cookieStore.get('csrf_token')?.value;
 
-    // Prepare headers for backend request
+    // Create headers with CSRF token
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Add CSRF token if available
     if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken.value;
+      headers['X-CSRF-Token'] = csrfToken;
     }
 
-    // Prepare cookie header
-    const cookieHeader: string[] = [];
-    if (accessToken)
-      cookieHeader.push(`access_token=${accessToken.value}`);
-    if (refreshToken)
-      cookieHeader.push(`refresh_token=${refreshToken.value}`);
-    if (cookieHeader.length > 0) {
-      headers['Cookie'] = cookieHeader.join('; ');
-    }
+    // Call your backend logout endpoint
+    await fetch('http://localhost:8080/api/logout', {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+    });
 
-    // Forward the request to the backend
-    const backendRes = await fetch(
-      'http://localhost:8080/api/logout',
-      {
-        method: 'POST',
-        headers,
-      }
-    );
+    // Create response with cookie clearing
+    const response = NextResponse.json({
+      message: 'Logged out successfully',
+    });
 
-    if (!backendRes.ok) {
-      console.error(
-        'Backend Logout Failed:',
-        await backendRes.text()
-      );
-      return NextResponse.json({
-        error: 'Logout failed on the backend',
-      });
-    }
+    // Clear cookies
+    response.cookies.delete('access_token');
+    response.cookies.delete('refresh_token');
+    response.cookies.delete('csrf_token');
 
-    // Create the response
-    const nextResponse = NextResponse.json(
-      { message: 'Logged out successfully' },
-      { status: 200 }
-    );
-
-    // Clear cookies on the frontend
-    nextResponse.cookies.delete('access_token');
-    nextResponse.cookies.delete('refresh_token');
-    nextResponse.cookies.delete('csrf_token');
-
-    return nextResponse;
+    return response;
   } catch (error) {
     console.error('Logout error:', error);
     return NextResponse.json(

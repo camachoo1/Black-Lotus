@@ -29,6 +29,8 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      ENV: development  # development mode
+      FRONTEND_URL: http://localhost:3000  # Frontend URL for CORS
     ports:
       - "${SERVER_PORT}:8080"
     depends_on:
