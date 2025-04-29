@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/labstack/echo/v4"
 
@@ -24,10 +26,16 @@ func NewOAuthController(oauthService *services.OAuthService, sessionService *ser
 
 // GetGitHubAuthURL returns the GitHub OAuth URL
 func (c *OAuthController) GetGitHubAuthURL(ctx echo.Context) error {
+	returnTo := ctx.QueryParam("returnTo")
+
+	if returnTo == "" {
+			returnTo = "/" // Default to home if not specified
+	}
 	// Get base URL from request for redirect
 	scheme := ctx.Scheme()
 	host := ctx.Request().Host
-	redirectURI := scheme + "://" + host + "/api/auth/github/callback"
+	redirectURI := fmt.Sprintf("%s://%s/api/auth/github/callback?returnTo=%s", 
+    scheme, host, url.QueryEscape(returnTo))
 	
 	authURL := c.oauthService.GetAuthorizationURL("github", redirectURI)
 	
@@ -61,21 +69,38 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 			"error": "Failed to create session",
 		})
 	}
+
+	// Get returnTo from query params
+	returnTo := ctx.QueryParam("returnTo")
+	if returnTo == "" {
+			returnTo = "/" // Default to home
+	}
 	
-	// Set cookie
-	cookie := new(http.Cookie)
-	cookie.Name = "session_token"
-	cookie.Value = session.Token
-	cookie.Expires = session.ExpiresAt
-	cookie.Path = "/"
-	cookie.HttpOnly = true
-	cookie.Secure = true
-	cookie.SameSite = http.SameSiteStrictMode
-	
-	ctx.SetCookie(cookie)
+	  // Set access token cookie
+    accessCookie := new(http.Cookie)
+    accessCookie.Name = "access_token"
+    accessCookie.Value = session.AccessToken
+    accessCookie.Expires = session.AccessExpiry
+    accessCookie.Path = "/"
+    accessCookie.HttpOnly = true
+    accessCookie.Secure = true
+    accessCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
+    
+    // Set refresh token cookie
+    refreshCookie := new(http.Cookie)
+    refreshCookie.Name = "refresh_token"
+    refreshCookie.Value = session.RefreshToken
+    refreshCookie.Expires = session.RefreshExpiry
+    refreshCookie.Path = "/"
+    refreshCookie.HttpOnly = true
+    refreshCookie.Secure = true
+    refreshCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
+    
+    ctx.SetCookie(accessCookie)
+    ctx.SetCookie(refreshCookie)
 	
 	// Redirect to frontend
-	return ctx.Redirect(http.StatusTemporaryRedirect, "/")
+	return ctx.Redirect(http.StatusTemporaryRedirect, returnTo)
 }
 
 // GetGoogleAuthURL returns the Google OAuth URL
@@ -123,17 +148,28 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 		})
 	}
 	
-	// Set cookie
-	cookie := new(http.Cookie)
-	cookie.Name = "session_token"
-	cookie.Value = session.Token
-	cookie.Expires = session.ExpiresAt
-	cookie.Path = "/"
-	cookie.HttpOnly = true
-	cookie.Secure = true
-	cookie.SameSite = http.SameSiteStrictMode
-	
-	ctx.SetCookie(cookie)
+    // Set access token cookie
+    accessCookie := new(http.Cookie)
+    accessCookie.Name = "access_token"
+    accessCookie.Value = session.AccessToken
+    accessCookie.Expires = session.AccessExpiry
+    accessCookie.Path = "/"
+    accessCookie.HttpOnly = true
+    accessCookie.Secure = true
+    accessCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
+    
+    // Set refresh token cookie
+    refreshCookie := new(http.Cookie)
+    refreshCookie.Name = "refresh_token"
+    refreshCookie.Value = session.RefreshToken
+    refreshCookie.Expires = session.RefreshExpiry
+    refreshCookie.Path = "/"
+    refreshCookie.HttpOnly = true
+    refreshCookie.Secure = true
+    refreshCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
+    
+    ctx.SetCookie(accessCookie)
+    ctx.SetCookie(refreshCookie)
 	
 	// Redirect to frontend
 	return ctx.Redirect(http.StatusTemporaryRedirect, "/")

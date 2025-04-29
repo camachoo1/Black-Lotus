@@ -1,64 +1,79 @@
 package middleware
 
 import (
+	"black-lotus/internal/services"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-
-	"black-lotus/internal/services"
 )
 
 // AuthMiddleware provides authentication and authorization for routes
 type AuthMiddleware struct {
-  sessionService *services.SessionService
-  userService    *services.UserService
+    sessionService *services.SessionService
+    userService    *services.UserService
 }
 
 // NewAuthMiddleware creates a middleware instance with the required services
 func NewAuthMiddleware(sessionService *services.SessionService, userService *services.UserService) *AuthMiddleware {
-  return &AuthMiddleware{
-    sessionService: sessionService,
-    userService:    userService,
-  }
+    return &AuthMiddleware{
+        sessionService: sessionService,
+        userService:    userService,
+    }
 }
 
-// Authenticate checks for a valid session before allowing access to protected routes
-// Used as an Echo middleware on route groups that require authentication
+// Authenticate checks for a valid access token before allowing access to protected routes
 func (m *AuthMiddleware) Authenticate(next echo.HandlerFunc) echo.HandlerFunc {
-  return func(c echo.Context) error {
-        // Extract session cookie
-        cookie, err := c.Cookie("session_token")
+    return func(c echo.Context) error {
+        // Debug info
+        fmt.Println("Request headers:", c.Request().Header)
+        fmt.Println("Request cookies:", c.Request().Cookies())
+        
+        // Extract access token cookie
+        accessCookie, err := c.Cookie("access_token")
         if err != nil {
+            // No access token - check if there's a refresh token
+            _, refreshErr := c.Cookie("refresh_token")
+            if refreshErr != nil {
+                return c.JSON(http.StatusUnauthorized, map[string]string{
+                    "error": "You must be logged in to access this resource",
+                })
+            }
+            
+            // Has refresh token but no access token
             return c.JSON(http.StatusUnauthorized, map[string]string{
-                "error": "You must be logged in to access this resource",
+                "error": "Access token expired",
+                "code": "token_expired",
             })
         }
         
-        // Get the token value
-        tokenValue := cookie.Value
-        
-        // Fetch session by token, not by ID
-        session, err := m.sessionService.ValidateSessionByToken(c.Request().Context(), tokenValue)
+        // Validate access token
+        session, err := m.sessionService.ValidateAccessToken(c.Request().Context(), accessCookie.Value)
         if err != nil {
-            // Clear invalid cookie
-            cookie := new(http.Cookie)
-            cookie.Name = "session_token"
-            cookie.Value = ""
-            cookie.MaxAge = -1
-            cookie.Path = "/"
-            c.SetCookie(cookie)
+            // Clear invalid access token cookie
+            expiredCookie := new(http.Cookie)
+            expiredCookie.Name = "access_token"
+            expiredCookie.Value = ""
+            expiredCookie.MaxAge = -1
+            expiredCookie.Path = "/"
+            c.SetCookie(expiredCookie)
             
             return c.JSON(http.StatusUnauthorized, map[string]string{
-                "error": "Session expired or invalid",
+                "error": "Access token expired or invalid",
+                "code": "token_invalid",
             })
         }
         
         // Fetch user
         user, err := m.userService.GetUserByID(c.Request().Context(), session.UserID)
-    
-    // Add user to request context for handlers to access
-    c.Set("user", user)
-    
-    return next(c)
-  }
+        if err != nil {
+            return c.JSON(http.StatusInternalServerError, map[string]string{
+                "error": "Failed to get user information",
+            })
+        }
+        
+        // Add user to request context for handlers to access
+        c.Set("user", user)
+        return next(c)
+    }
 }

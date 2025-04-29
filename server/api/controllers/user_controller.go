@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"black-lotus/internal/models"
@@ -77,17 +76,31 @@ func (c *UserController) RegisterUser(ctx echo.Context) error {
         // We'll still return success but log the error
         log.Printf("Failed to create session for new user: %v", err)
     } else {
-        // Set secure cookie with session ID
-        cookie := new(http.Cookie)
-        cookie.Name = "session_token"
-        cookie.Value = session.ID.String()
-        cookie.Expires = session.ExpiresAt
-        cookie.Path = "/"
-        cookie.HttpOnly = true  // Prevents JavaScript access
-        cookie.Secure = true    // Requires HTTPS
-        cookie.SameSite = http.SameSiteStrictMode  // Prevents CSRF attacks
-        
-        ctx.SetCookie(cookie)
+        // Set secure cookie with session token
+        // Set access token cookie
+        accessCookie := new(http.Cookie)
+        accessCookie.Name = "access_token"
+        accessCookie.Value = session.AccessToken
+        accessCookie.Expires = session.AccessExpiry
+        accessCookie.Path = "/"
+        accessCookie.HttpOnly = true
+        // For production
+        accessCookie.Secure = true
+        accessCookie.SameSite = http.SameSiteStrictMode
+
+        // Set refresh token cookie
+        refreshCookie := new(http.Cookie)
+        refreshCookie.Name = "refresh_token"
+        refreshCookie.Value = session.RefreshToken
+        refreshCookie.Expires = session.RefreshExpiry
+        refreshCookie.Path = "/"
+        refreshCookie.HttpOnly = true
+        // For production
+        refreshCookie.Secure = true
+        refreshCookie.SameSite = http.SameSiteStrictMode
+
+        ctx.SetCookie(accessCookie)
+        ctx.SetCookie(refreshCookie)
     }
     
     return ctx.JSON(http.StatusCreated, user)
@@ -128,52 +141,165 @@ func (c *UserController) LoginUser(ctx echo.Context) error {
         })
     }
 
-    // Set secure HTTP-only cookie with session ID
-    cookie := new(http.Cookie)
-    cookie.Name = "session_token" // Using token instead of ID for better security
-    cookie.Value = session.Token
-    cookie.Expires = session.ExpiresAt
-    cookie.Path = "/"
-    cookie.HttpOnly = true // Used to prevent Javascript access
-    cookie.Secure = true
-    cookie.SameSite = http.SameSiteStrictMode // Prevents CSRF attacks
+    // Set access token cookie
+    accessCookie := new(http.Cookie)
+    accessCookie.Name = "access_token"
+    accessCookie.Value = session.AccessToken
+    accessCookie.Expires = session.AccessExpiry
+    accessCookie.Path = "/"
+    accessCookie.HttpOnly = true
+    // For production
+    accessCookie.Secure = true
+    accessCookie.SameSite = http.SameSiteStrictMode
 
-    ctx.SetCookie(cookie)
+    // Set refresh token cookie
+    refreshCookie := new(http.Cookie)
+    refreshCookie.Name = "refresh_token"
+    refreshCookie.Value = session.RefreshToken
+    refreshCookie.Expires = session.RefreshExpiry
+    refreshCookie.Path = "/"
+    refreshCookie.HttpOnly = true
+    // For production
+    refreshCookie.Secure = true
+    refreshCookie.SameSite = http.SameSiteStrictMode
+
+    ctx.SetCookie(accessCookie)
+    ctx.SetCookie(refreshCookie)
     
     return ctx.JSON(http.StatusOK, user)
 }
 
 // LogoutUser ends the current user session
 func (c *UserController) LogoutUser(ctx echo.Context) error {
-	cookie, err := ctx.Cookie("session_token")
-	if err != nil {
-		return ctx.JSON(http.StatusOK, map[string]string{
-			"message": "Already logged out",
-		})
-	}
-	
-	sessionID, err := uuid.Parse(cookie.Value)
-	if err == nil {
-        // Delete the session from database
-		_ = c.sessionService.EndSession(ctx.Request().Context(), sessionID)
-	}
-	
-    // Make sure to always clear the cookie, even if session delete fails
-	cookie = new(http.Cookie)
-	cookie.Name = "session_id"
-	cookie.Value = ""
-	cookie.MaxAge = -1  // Expire immediately
-	cookie.Path = "/"
-	ctx.SetCookie(cookie)
-	
-	return ctx.JSON(http.StatusOK, map[string]string{
-		"message": "Successfully logged out",
-	})
+    // Try to get both tokens
+    accessCookie, accessErr := ctx.Cookie("access_token")
+    refreshCookie, refreshErr := ctx.Cookie("refresh_token")
+    
+    // Check if already logged out
+    if accessErr != nil && refreshErr != nil {
+        return ctx.JSON(http.StatusOK, map[string]string{
+            "message": "Already logged out",
+        })
+    }
+    
+    // Delete session by access token if it exists
+    if accessErr == nil {
+        err := c.sessionService.EndSessionByAccessToken(ctx.Request().Context(), accessCookie.Value)
+        if err != nil {
+            // Log the error but continue
+            log.Printf("Failed to end session by access token: %v", err)
+        }
+    }
+    
+    // Delete session by refresh token if it exists
+    if refreshErr == nil {
+        err := c.sessionService.EndSessionByRefreshToken(ctx.Request().Context(), refreshCookie.Value)
+        if err != nil {
+            // Log the error but continue
+            log.Printf("Failed to end session by refresh token: %v", err)
+        }
+    }
+    
+    // Clear access token cookie
+    accessCookieClear := new(http.Cookie)
+    accessCookieClear.Name = "access_token"
+    accessCookieClear.Value = ""
+    accessCookieClear.MaxAge = -1 // Expire immediately
+    accessCookieClear.Path = "/"
+    ctx.SetCookie(accessCookieClear)
+    
+    // Clear refresh token cookie
+    refreshCookieClear := new(http.Cookie)
+    refreshCookieClear.Name = "refresh_token"
+    refreshCookieClear.Value = ""
+    refreshCookieClear.MaxAge = -1 // Expire immediately
+    refreshCookieClear.Path = "/"
+    ctx.SetCookie(refreshCookieClear)
+    
+    return ctx.JSON(http.StatusOK, map[string]string{
+        "message": "Successfully logged out",
+    })
+}
+
+func (c *UserController) RefreshToken(ctx echo.Context) error {
+    // Get refresh token from cookie
+    refreshCookie, err := ctx.Cookie("refresh_token")
+    if err != nil {
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "No refresh token provided",
+        })
+    }
+    
+    // Use the refresh token to get a new access token
+    session, err := c.sessionService.RefreshAccessToken(ctx.Request().Context(), refreshCookie.Value)
+    if err != nil {
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Invalid refresh token",
+        })
+    }
+    
+    // Set the new access token cookie
+    accessCookie := new(http.Cookie)
+    accessCookie.Name = "access_token"
+    accessCookie.Value = session.AccessToken
+    accessCookie.Expires = session.AccessExpiry
+    accessCookie.Path = "/"
+    accessCookie.HttpOnly = true
+    
+    // For production
+    accessCookie.Secure = true
+    accessCookie.SameSite = http.SameSiteLaxMode
+    
+    ctx.SetCookie(accessCookie)
+    
+    return ctx.JSON(http.StatusOK, map[string]string{
+        "message": "Access token refreshed successfully",
+    })
 }
 
 func (c *UserController) GetUserProfile(ctx echo.Context) error {
-	// Get user from context (set by auth middleware)
-	user := ctx.Get("user").(*models.User)
-	
-	return ctx.JSON(http.StatusOK, user)
+    // Get access token from cookie
+    accessCookie, err := ctx.Cookie("access_token")
+    if err != nil {
+        // No access token - check if there's a refresh token
+        _, refreshErr := ctx.Cookie("refresh_token")
+        if refreshErr != nil {
+            return ctx.JSON(http.StatusUnauthorized, map[string]string{
+                "error": "Not authenticated",
+            })
+        }
+        
+        // Has refresh token but no access token - client should refresh
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Access token expired",
+            "code": "token_expired",
+        })
+    }
+    
+    // Validate access token
+    session, err := c.sessionService.ValidateAccessToken(ctx.Request().Context(), accessCookie.Value)
+    if err != nil {
+        return ctx.JSON(http.StatusUnauthorized, map[string]string{
+            "error": "Invalid access token",
+            "code": "token_invalid",
+        })
+    }
+    
+    // Get user from session
+    user, err := c.userService.GetUserByID(ctx.Request().Context(), session.UserID)
+    if err != nil {
+        return ctx.JSON(http.StatusInternalServerError, map[string]string{
+            "error": "Failed to get user",
+        })
+    }
+    
+    return ctx.JSON(http.StatusOK, user)
+}
+
+func (c *UserController) GetCSRFToken(ctx echo.Context) error {
+    token := ctx.Get("csrf").(string)
+    
+    return ctx.JSON(http.StatusOK, map[string]string{
+        "csrf_token": token,
+    })
 }

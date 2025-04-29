@@ -5,11 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { AuthModal } from '../Modals/auth';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function Navbar() {
   const [isSticky, setIsSticky] = useState(false); // handle navbar sticking to top
   const pathname = usePathname();
-
+  const { user, logout } = useAuth();
   const isHome = pathname === '/';
 
   // on scroll navbar will stick and display additional info
@@ -23,6 +24,10 @@ export function Navbar() {
   }, []);
 
   const showFullNav = !isHome || isSticky;
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <nav
@@ -82,19 +87,37 @@ export function Navbar() {
         </div>
 
         {/* RIGHT: Auth buttons */}
-        <div className='flex space-x-2'>
-          <AuthModal initialMode='login'>
-            <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900 hover:cursor-pointer'>
-              Login
+        {user ? (
+          <>
+            <Link href='/account'>
+              <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900 hover:cursor-pointer'>
+                My Account
+              </button>
+            </Link>
+            <button
+              onClick={handleLogout}
+              className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500 hover:cursor-pointer'
+            >
+              Logout
             </button>
-          </AuthModal>
+          </>
+        ) : (
+          <>
+            <div className='flex space-x-2'>
+              <AuthModal initialMode='login'>
+                <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg hover:bg-gray-100 text-gray-900 hover:cursor-pointer'>
+                  Login
+                </button>
+              </AuthModal>
 
-          <AuthModal initialMode='signup'>
-            <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500 hover:cursor-pointer'>
-              Sign Up
-            </button>
-          </AuthModal>
-        </div>
+              <AuthModal initialMode='signup'>
+                <button className='custom-text text-xs px-5 py-2.5 font-semibold rounded-lg bg-cyan-400 text-white hover:bg-cyan-500 hover:cursor-pointer'>
+                  Sign Up
+                </button>
+              </AuthModal>
+            </div>
+          </>
+        )}
       </div>
     </nav>
   );
