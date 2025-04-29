@@ -1,9 +1,11 @@
 package middleware
+
 import (
-    "fmt"
-    "net/http"
-    "github.com/labstack/echo/v4"
-    "black-lotus/internal/services"
+	"black-lotus/internal/services"
+	"fmt"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
 )
 
 // AuthMiddleware provides authentication and authorization for routes

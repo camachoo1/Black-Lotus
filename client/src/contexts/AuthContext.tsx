@@ -13,7 +13,10 @@ interface AuthContextType {
   isLoading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => void;
-  fetchWithCsrf: (url: string, options?: FetchOptions) => Promise<Response>;
+  fetchWithCsrf: (
+    url: string,
+    options?: FetchOptions
+  ) => Promise<Response>;
   csrfToken: string;
 }
 
@@ -39,7 +42,6 @@ export const AuthProvider = ({
     fetchWithCsrf,
     csrfToken,
   } = useAuthCheck();
-
 
   const refreshUser = () => {
     refreshUserFromHook();

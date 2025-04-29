@@ -1,11 +1,12 @@
 package services
 
 import (
-    "context"
-    "time"
-    "github.com/google/uuid"
-    "black-lotus/internal/models"
-    "black-lotus/internal/repositories"
+	"black-lotus/internal/models"
+	"black-lotus/internal/repositories"
+	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // SessionService coordinates business logic for session management
