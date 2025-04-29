@@ -1,9 +1,5 @@
+import { FetchOptions, useAuthCheck } from '@/lib/auth';
 import { createContext, useContext, ReactNode } from 'react';
-import {
-  useQueryClient,
-  useMutation,
-} from '@tanstack/react-query';
-import { useAuthCheck } from '@/lib/auth';
 
 interface User {
   id: string;
@@ -17,6 +13,8 @@ interface AuthContextType {
   isLoading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => void;
+  fetchWithCsrf: (url: string, options?: FetchOptions) => Promise<Response>;
+  csrfToken: string;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +22,8 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   logout: async () => {},
   refreshUser: () => {},
+  fetchWithCsrf: async () => new Response(),
+  csrfToken: '',
 });
 
 export const AuthProvider = ({
@@ -31,28 +31,22 @@ export const AuthProvider = ({
 }: {
   children: ReactNode;
 }) => {
-  const queryClient = useQueryClient();
-  const { data: user, isLoading } = useAuthCheck();
+  const {
+    user,
+    isLoading,
+    logout: logoutFromHook,
+    refreshUser: refreshUserFromHook,
+    fetchWithCsrf,
+    csrfToken,
+  } = useAuthCheck();
 
-  // Logout mutation
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(['authUser'], null);
-    },
-  });
 
   const refreshUser = () => {
-    queryClient.invalidateQueries({ queryKey: ['authUser'] });
+    refreshUserFromHook();
   };
 
   const logout = async () => {
-    await logoutMutation.mutateAsync();
+    await logoutFromHook();
   };
 
   return (
@@ -62,6 +56,8 @@ export const AuthProvider = ({
         isLoading,
         logout,
         refreshUser,
+        fetchWithCsrf,
+        csrfToken,
       }}
     >
       {children}
