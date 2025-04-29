@@ -9,18 +9,12 @@ export interface FetchOptions extends RequestInit {
 let isRefreshing = false;
 
 // Queue of requests waiting for token refresh
-let refreshQueue: Array<() => void> = [];
-
-// Process queued requests after token refresh
-function processQueue() {
-  refreshQueue.forEach((callback) => callback());
-  refreshQueue = [];
-}
+let refreshQueue: Array<(err?: Error | null) => void> = [];
 
 // Combined hook that handles authentication, token refresh and CSRF
 export const useAuthCheck = () => {
-  const [csrfToken, setCsrfToken] = useState<string>('');
-  const [csrfLoading, setCsrfLoading] = useState<boolean>(true);
+  const [csrfToken, setCsrfToken] = useState('');
+  const [csrfLoading, setCsrfLoading] = useState(true);
   const [csrfError, setCsrfError] = useState<Error | null>(null);
   const queryClient = useQueryClient();
 
@@ -82,65 +76,66 @@ export const useAuthCheck = () => {
     url: string,
     options: FetchOptions = {}
   ) => {
-    try {
-      // First attempt with current tokens
-      const headers = {
-        ...options.headers,
-        'X-CSRF-Token': csrfToken,
-      };
+    // Add CSRF token to headers
+    const headers = {
+      ...options.headers,
+      'X-CSRF-Token': csrfToken,
+    };
 
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-      });
+    // First attempt
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
 
-      // If not unauthorized, return response
-      if (response.status !== 401) {
-        return response;
-      }
-
-      // Check if it's a token expiration error
+    // Check if it's a token expiration error
+    if (response.status === 401) {
       try {
         const data = await response.json();
-        if (data.code !== 'token_expired') {
-          // Not a token expiration issue
-          return response;
+        if (data.code === 'token_expired') {
+          // Handle token refresh
+          if (!isRefreshing) {
+            isRefreshing = true;
+            try {
+              const ok = await refreshAccessToken();
+              if (!ok) throw new Error('Token refresh failed');
+              // Wake up all waiters successfully
+              refreshQueue.forEach((cb) => cb(null));
+            } catch (err) {
+              const typedError =
+                err instanceof Error ? err : new Error(String(err));
+              // Wake up all waiters with error
+              refreshQueue.forEach((cb) => cb(typedError));
+              throw err;
+            } finally {
+              isRefreshing = false;
+              refreshQueue = [];
+            }
+          } else {
+            // Wait for the in-flight refresh to resolve or reject
+            await new Promise<void>((resolve, reject) => {
+              refreshQueue.push((err?) =>
+                err ? reject(err) : resolve()
+              );
+            });
+          }
+
+          // Retry original request with new token
+          return fetch(url, {
+            ...options,
+            headers,
+            credentials: 'include',
+          });
         }
       } catch {
-        // If we can't parse JSON, it's not a token expiration error
-        return response;
+        // Ignore errors parsing the response body
       }
-
-      // Handle token refresh
-      let refreshSuccess = false;
-
-      // If not already refreshing, initiate refresh
-      if (!isRefreshing) {
-        isRefreshing = true;
-        refreshSuccess = await refreshAccessToken();
-        isRefreshing = false;
-        processQueue();
-      } else {
-        // Wait for the ongoing refresh to complete
-        await new Promise<void>((resolve) => {
-          refreshQueue.push(resolve);
-        });
-      }
-
-      // Retry original request with new token
-      return fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Request failed:', error);
-      throw error;
     }
+
+    return response;
   };
 
-  // Use the fetchWithCsrf in auth check
   const {
     data: user,
     isLoading: authLoading,

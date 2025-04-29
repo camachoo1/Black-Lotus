@@ -49,25 +49,24 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 	// Get code from query parameters
 	code := ctx.QueryParam("code")
 	if code == "" {
-		return ctx.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Missing code parameter",
-		})
-	}
+    // Redirect to error page with message
+    return ctx.Redirect(http.StatusTemporaryRedirect, "http://localhost:3000/auth/error?message=Missing+authorization+code")
+  }
 	
 	// Authenticate with GitHub
 	user, err := c.oauthService.AuthenticateGitHub(ctx.Request().Context(), code)
 	if err != nil {
-		return ctx.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Authentication failed: " + err.Error(),
-		})
+		   // Redirect to error page with message
+        return ctx.Redirect(http.StatusTemporaryRedirect, 
+            "http://localhost:3000/auth/error?message="+url.QueryEscape(err.Error()))
 	}
 	
 	// Create session
 	session, err := c.sessionService.CreateSession(ctx.Request().Context(), user.ID)
 	if err != nil {
-		return ctx.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create session",
-		})
+		  // Redirect to error page with message
+        return ctx.Redirect(http.StatusTemporaryRedirect, 
+            "http://localhost:3000/auth/error?message=Failed+to+create+session")
 	}
 
 	// Get returnTo from query params
@@ -98,9 +97,13 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
     
     ctx.SetCookie(accessCookie)
     ctx.SetCookie(refreshCookie)
+
+		 // Redirect to callback page with returnTo parameter
+    callbackURL := fmt.Sprintf("http://localhost:3000/auth/callback?returnTo=%s", 
+        url.QueryEscape(returnTo))
 	
 	// Redirect to frontend
-	return ctx.Redirect(http.StatusTemporaryRedirect, returnTo)
+	return ctx.Redirect(http.StatusTemporaryRedirect, callbackURL)
 }
 
 // GetGoogleAuthURL returns the Google OAuth URL
