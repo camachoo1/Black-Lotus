@@ -1,55 +1,68 @@
 package services
 
 import (
-	"context"
-	"time"
-
-	"github.com/google/uuid"
-
-	"black-lotus/internal/models"
-	"black-lotus/internal/repositories"
+    "context"
+    "time"
+    "github.com/google/uuid"
+    "black-lotus/internal/models"
+    "black-lotus/internal/repositories"
 )
 
 // SessionService coordinates business logic for session management
 type SessionService struct {
-	sessionRepo *repositories.SessionRepository
+    sessionRepo *repositories.SessionRepository
 }
 
 // NewSessionService creates a new session service
 func NewSessionService(sessionRepo *repositories.SessionRepository) *SessionService {
-	return &SessionService{
-		sessionRepo: sessionRepo,
-	}
+    return &SessionService{
+        sessionRepo: sessionRepo,
+    }
 }
 
-// CreateSession creates a new session for a user with default duration
+// CreateSession creates a new session with both access and refresh tokens
 func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID) (*models.Session, error) {
-	// Default session duration - 7 days
-	sessionDuration := 7 * 24 * time.Hour
-	
-	return s.sessionRepo.CreateSession(ctx, userID, sessionDuration)
+    // Access token - short-lived (1 hour)
+    accessDuration := 1 * time.Hour
+    // Refresh token - long-lived (7 days)
+    refreshDuration := 7 * 24 * time.Hour
+    
+    return s.sessionRepo.CreateSession(ctx, userID, accessDuration, refreshDuration)
 }
 
-// ValidateSession checks if a session exists and is valid
-func (s *SessionService) ValidateSession(ctx context.Context, sessionID uuid.UUID) (*models.Session, error) {
-	return s.sessionRepo.GetSessionByID(ctx, sessionID)
+// ValidateAccessToken checks if an access token is valid
+func (s *SessionService) ValidateAccessToken(ctx context.Context, token string) (*models.Session, error) {
+    return s.sessionRepo.GetSessionByAccessToken(ctx, token)
 }
 
-func (s *SessionService) ValidateSessionByToken(ctx context.Context, token string) (*models.Session, error) {
-    return s.sessionRepo.GetSessionByToken(ctx, token)
+// ValidateRefreshToken checks if a refresh token is valid
+func (s *SessionService) ValidateRefreshToken(ctx context.Context, token string) (*models.Session, error) {
+    return s.sessionRepo.GetSessionByRefreshToken(ctx, token)
 }
 
-// EndSession terminates a specific session
-func (s *SessionService) EndSession(ctx context.Context, sessionID uuid.UUID) error {
-	return s.sessionRepo.DeleteSession(ctx, sessionID)
+// RefreshAccessToken uses a refresh token to generate a new access token
+func (s *SessionService) RefreshAccessToken(ctx context.Context, refreshToken string) (*models.Session, error) {
+    // First validate the refresh token
+    session, err := s.ValidateRefreshToken(ctx, refreshToken)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Generate a new access token
+    return s.sessionRepo.RefreshAccessToken(ctx, session.ID)
+}
+
+// EndSessionByAccessToken terminates a session by its access token
+func (s *SessionService) EndSessionByAccessToken(ctx context.Context, token string) error {
+    return s.sessionRepo.DeleteSessionByAccessToken(ctx, token)
+}
+
+// EndSessionByRefreshToken terminates a session by its refresh token
+func (s *SessionService) EndSessionByRefreshToken(ctx context.Context, token string) error {
+    return s.sessionRepo.DeleteSessionByRefreshToken(ctx, token)
 }
 
 // EndAllUserSessions terminates all sessions for a user
 func (s *SessionService) EndAllUserSessions(ctx context.Context, userID uuid.UUID) error {
-	return s.sessionRepo.DeleteUserSessions(ctx, userID)
-}
-
-// EndSessionByToken terminates a session by its token
-func (s *SessionService) EndSessionByToken(ctx context.Context, token string) error {
-    return s.sessionRepo.DeleteSessionByToken(ctx, token)
+    return s.sessionRepo.DeleteUserSessions(ctx, userID)
 }

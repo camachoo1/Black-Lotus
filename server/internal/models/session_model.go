@@ -9,7 +9,9 @@ import (
 type Session struct {
     ID        uuid.UUID `json:"id"`
     UserID    uuid.UUID `json:"user_id"`
-    Token     string    `json:"-"` // Not included in JSON responses
-    ExpiresAt time.Time `json:"expires_at"`
+    AccessToken  string    `json:"-"` // Short-lived token
+    RefreshToken string    `json:"-"` // Long-lived token
+    AccessExpiry time.Time `json:"access_expires_at"`
+    RefreshExpiry time.Time `json:"refresh_expires_at"`
     CreatedAt time.Time `json:"created_at"`
 }
