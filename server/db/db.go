@@ -78,11 +78,14 @@ func initSchema() error {
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
-        -- Sessions table
+        -- Sessions table - updated for access & refresh tokens
         CREATE TABLE IF NOT EXISTS sessions (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             user_id UUID NOT NULL,
-            expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            access_token_hash VARCHAR(255),
+            refresh_token_hash VARCHAR(255),
+            access_expires_at TIMESTAMP WITH TIME ZONE,
+            refresh_expires_at TIMESTAMP WITH TIME ZONE,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -99,8 +102,11 @@ func initSchema() error {
         
         -- Create indexes for better performance
         CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
-        CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_access_expires_at ON sessions(access_expires_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_refresh_expires_at ON sessions(refresh_expires_at);
         CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_access_token_hash ON sessions(access_token_hash);
+        CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token_hash ON sessions(refresh_token_hash);
         CREATE INDEX IF NOT EXISTS idx_email_verifications_expires_at ON email_verifications(expires_at);
     `)
     

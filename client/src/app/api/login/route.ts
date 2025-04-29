@@ -25,11 +25,13 @@ export async function POST(request: Request) {
       status: response.status,
     });
 
-    // Forward the Set-Cookie header from Go backend to client
-    const setCookieHeader = response.headers.get('Set-Cookie');
-    if (setCookieHeader) {
-      nextResponse.headers.set('Set-Cookie', setCookieHeader);
-    }
+    // Forward all Set-Cookie headers (access and refresh tokens)
+    response.headers.forEach((value, key) => {
+      // Only copy the Set-Cookie header
+      if (key.toLowerCase() === 'set-cookie') {
+        nextResponse.headers.set(key, value);
+      }
+    });
 
     return nextResponse;
   } catch (error) {

@@ -3,30 +3,54 @@ import { cookies } from 'next/headers';
 
 export async function GET() {
   try {
-    // Get all cookies
+    // Get both tokens from cookies
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('session_token');
+    const accessToken = cookieStore.get('access_token');
+    const refreshToken = cookieStore.get('refresh_token');
 
-    if (!sessionToken) {
+    // Check for authentication
+    if (!accessToken) {
+      if (!refreshToken) {
+        return NextResponse.json(
+          { error: 'Not authenticated' },
+          { status: 401 }
+        );
+      }
+
+      // Has refresh token but no access token
       return NextResponse.json(
-        { error: 'Not authenticated' },
+        { error: 'Access token expired', code: 'token_expired' },
         { status: 401 }
       );
     }
 
-    // Forward the request to Go backend with the session token
+    // Forward the request to Go backend with the access token
     const response = await fetch(
       'http://localhost:8080/api/profile',
       {
         method: 'GET',
         headers: {
-          Cookie: `session_token=${sessionToken.value}`,
+          Cookie: `access_token=${accessToken.value}`,
         },
-        credentials: 'include'
       }
     );
 
     if (!response.ok) {
+      if (response.status === 401) {
+        // Get more details to check if it's a token expiration
+        try {
+          const errorData = await response.json();
+          if (
+            errorData.code === 'token_expired' ||
+            errorData.code === 'token_invalid'
+          ) {
+            return NextResponse.json(errorData, { status: 401 });
+          }
+        } catch {
+          // If we can't parse JSON, just return the normal error
+        }
+      }
+
       return NextResponse.json(
         { error: `Failed to fetch profile: ${response.status}` },
         { status: response.status }
