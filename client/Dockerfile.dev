@@ -3,7 +3,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --peer-legacy-deps
+RUN npm install --legacy-peer-deps
 
 EXPOSE 3000
 
