@@ -46,6 +46,7 @@ export function AuthModal({
     handleSubmit,
     formState: { errors },
     setValue,
+    clearErrors,
   } = useForm<FormValues>({
     defaultValues: {
       name: '',
@@ -123,6 +124,7 @@ export function AuthModal({
 
   // OAuth handler
   const handleOAuth = (provider: 'google' | 'github' | 'apple') => {
+    clearErrors();
     const returnTo = encodeURIComponent(window.location.pathname);
 
     // We'll still use our frontend routes for the OAuth flow
@@ -263,18 +265,21 @@ export function AuthModal({
         {/* OAUTH BUTTONS */}
         <div className='flex flex-col gap-2 mt-2'>
           <button
+            type='button'
             onClick={() => handleOAuth('google')}
             className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >
             <FaGoogle /> Continue with Google
           </button>
           <button
+            type='button'
             onClick={() => handleOAuth('github')}
             className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >
             <FaGithub /> Continue with GitHub
           </button>
           <button
+            type='button'
             onClick={() => handleOAuth('apple')}
             className='flex items-center justify-center gap-2 w-full px-4 py-2 rounded border border-gray-300 hover:bg-gray-100 transition hover:cursor-pointer'
           >

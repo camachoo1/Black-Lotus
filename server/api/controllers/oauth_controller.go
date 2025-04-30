@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -59,6 +58,17 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 		})
 	}
 
+	// Get state parameter (contains our returnTo value)
+	state := ctx.QueryParam("state")
+	returnTo := "/" // Default to callback page
+	if state != "" {
+		decodedState, err := url.QueryUnescape(state)
+		if err == nil {
+			// If we have a valid state, use it for returnTo
+			returnTo = decodedState
+		}
+	}
+
 	// Authenticate with GitHub
 	user, err := c.oauthService.AuthenticateGitHub(ctx.Request().Context(), code)
 	if err != nil {
@@ -73,17 +83,6 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to create session",
 		})
-	}
-
-	// Get state parameter (contains our returnTo value)
-	state := ctx.QueryParam("state")
-	returnTo := "/" // Default to callback page
-	if state != "" {
-		decodedState, err := url.QueryUnescape(state)
-		if err == nil {
-			// If we have a valid state, use it for returnTo
-			returnTo = decodedState
-		}
 	}
 
 	// Get frontend URL from environment or use default
@@ -156,12 +155,12 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 
 	// Get state parameter (contains our returnTo value)
 	state := ctx.QueryParam("state")
-	returnTo := "/auth/callback" // Default to callback page
+	returnTo := "/" // Default to callback page
 	if state != "" {
 		decodedState, err := url.QueryUnescape(state)
 		if err == nil {
 			// If we have a valid state, use it for returnTo
-			returnTo = "/auth/callback?returnTo=" + url.QueryEscape(decodedState)
+			returnTo = decodedState
 		}
 	}
 
@@ -192,12 +191,7 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 		frontendURL = "http://localhost:3000"
 	}
 
-	// If multiple URLs are configured, use the first one
-	if strings.Contains(frontendURL, ",") {
-		frontendURL = strings.Split(frontendURL, ",")[0]
-	}
-
-	redirectURL := frontendURL + returnTo
+	redirectURL := frontendURL + "/auth/callback?returnTo=" + url.QueryEscape(returnTo)
 
 	// Set access token cookie
 	accessCookie := new(http.Cookie)
