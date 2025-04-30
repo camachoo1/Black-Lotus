@@ -35,7 +35,8 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
         AllowOrigins:     []string{"http://localhost:3000"},
         AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
-        AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+        AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, "X-CSRF-TOKEN"},
+				ExposeHeaders: []string{"Set-Cookie"},
         AllowCredentials: true, // This is crucial for sending cookies
     }))
 	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
