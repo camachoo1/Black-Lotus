@@ -1,23 +1,28 @@
 'use client';
-
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AuthCallback() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refreshUser } = useAuth();
 
   useEffect(() => {
-    // Get the return path if specified
+    console.log('Auth callback page loaded');
+
+    // Refresh the user data to reflect the login state
+    refreshUser();
+
     const returnTo = searchParams.get('returnTo') || '/';
 
-    // Add a small delay to ensure cookies are processed
+    // Add a delay to ensure cookies are processed
     const redirectTimer = setTimeout(() => {
       router.push(returnTo);
-    }, 500);
+    }, 1500);
 
     return () => clearTimeout(redirectTimer);
-  }, [router, searchParams]);
+  }, [router, searchParams, refreshUser]);
 
   return (
     <div className='flex flex-col items-center justify-center min-h-screen'>

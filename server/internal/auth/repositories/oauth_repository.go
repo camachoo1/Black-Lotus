@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"black-lotus/internal/models"
+	"black-lotus/internal/auth/models"
 )
 
 // OAuthRepository handles database operations for OAuth accounts
@@ -69,14 +69,14 @@ func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, provi
 
 // GetUserOAuthAccounts gets all OAuth accounts for a specific user
 func (r *OAuthRepository) GetUserOAuthAccounts(ctx context.Context, userID uuid.UUID) ([]models.OAuthAccount, error) {
-	
+
 	rows, err := r.db.Query(ctx, `
 		SELECT provider_id, provider_user_id, user_id, 
 			access_token, refresh_token, expires_at, created_at, updated_at
 		FROM oauth_accounts
 		WHERE user_id = $1
 	`, userID)
-	
+
 	if err != nil {
 		return nil, err
 	}

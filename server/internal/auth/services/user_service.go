@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"black-lotus/internal/models"
-	"black-lotus/internal/repositories"
+	"black-lotus/internal/auth/models"
+	"black-lotus/internal/auth/repositories"
 )
 
 type UserService struct {
@@ -72,13 +72,13 @@ func (s *UserService) LoginUser(ctx context.Context, input models.LoginUserInput
 }
 
 func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) {
-    user, err := s.userRepo.GetUserByID(ctx, userID)
-    if err != nil {
-        return nil, err
-    }
-    
-    // Don't return the hashed password
-    user.HashedPassword = nil
-    
-    return user, nil
+	user, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Don't return the hashed password
+	user.HashedPassword = nil
+
+	return user, nil
 }

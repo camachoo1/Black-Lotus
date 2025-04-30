@@ -3,9 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
-	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -49,7 +49,7 @@ func Close() {
 
 // initSchema creates database tables if they don't exist
 func initSchema() error {
-    _, err := DB.Exec(context.Background(), `
+	_, err := DB.Exec(context.Background(), `
         -- Enable UUID extension if not already enabled
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
         
@@ -61,7 +61,9 @@ func initSchema() error {
             hashed_password VARCHAR(255) DEFAULT NULL,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						CONSTRAINT email_format_check 
+        		CHECK (email ~* '^[A-Za-z0-9._%-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,4}$')
         );
         
         -- OAuth accounts table
@@ -109,8 +111,8 @@ func initSchema() error {
         CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token_hash ON sessions(refresh_token_hash);
         CREATE INDEX IF NOT EXISTS idx_email_verifications_expires_at ON email_verifications(expires_at);
     `)
-    
-    return err
+
+	return err
 }
 
 // CleanupExpiredRecords removes all expired sessions and verification codes
@@ -122,7 +124,7 @@ func CleanupExpiredRecords(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	// Delete expired email verifications
 	verificationResult, err := DB.Exec(ctx, `
 		DELETE FROM email_verifications WHERE expires_at < NOW()
@@ -130,11 +132,11 @@ func CleanupExpiredRecords(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	// Return total number of deleted records
 	sessionCount := sessionResult.RowsAffected()
 	verificationCount := verificationResult.RowsAffected()
-	
+
 	return sessionCount + verificationCount, nil
 }
 
@@ -143,7 +145,7 @@ func StartCleanupJob(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ticker.C:

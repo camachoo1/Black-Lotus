@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
+      - '${DB_PORT}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -29,12 +29,31 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      ENV: development  # development mode
-      FRONTEND_URL: http://localhost:3000  # Frontend URL for CORS
+      ENV: development # development mode
+      # Include both the Docker network URL and the localhost URL for CORS
+      FRONTEND_URL: http://localhost:3000
     ports:
-      - "${SERVER_PORT}:8080"
+      - '${SERVER_PORT}:8080'
     depends_on:
       - postgres
+    networks:
+      - app-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: black-lotus-client
+    environment:
+      # Use the publicly accessible URL from the host machine
+      NEXT_PUBLIC_API_URL: http://localhost:${SERVER_PORT}
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
     networks:
       - app-network
 

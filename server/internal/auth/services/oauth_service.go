@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"black-lotus/internal/models"
-	"black-lotus/internal/repositories"
+	"black-lotus/internal/auth/models"
+	"black-lotus/internal/auth/repositories"
 )
 
 // OAuthService handles authentication with OAuth providers
@@ -75,19 +75,21 @@ func NewOAuthService(
 }
 
 // GetAuthorizationURL returns the URL to redirect users for OAuth login
-func (s *OAuthService) GetAuthorizationURL(provider string, redirectURI string) string {
+func (s *OAuthService) GetAuthorizationURL(provider string, redirectURI string, state string) string {
 	switch provider {
 	case "github":
 		return fmt.Sprintf(
-			"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email",
+			"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email&state=%s",
 			os.Getenv("GITHUB_CLIENT_ID"),
 			url.QueryEscape(redirectURI),
+			url.QueryEscape(state),
 		)
 	case "google":
 		return fmt.Sprintf(
-			"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=email%%20profile",
+			"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=email%%20profile&state=%s",
 			os.Getenv("GOOGLE_CLIENT_ID"),
 			url.QueryEscape(redirectURI),
+			url.QueryEscape(state),
 		)
 	default:
 		return ""
@@ -140,7 +142,7 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
-	
+
 	defer resp.Body.Close()
 
 	var userResp githubUserResponse
@@ -189,21 +191,21 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 	// Check if OAuth account exists
 	providerUserID := fmt.Sprintf("%d", userResp.ID)
 	account, err := s.oauthRepo.GetOAuthAccount(ctx, "github", providerUserID)
-	
+
 	if err == nil {
 		// Account exists, get associated user
 		user, err := s.userRepo.GetUserByID(ctx, account.UserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
-		
+
 		// Update the token
 		account.AccessToken = tokenResp.AccessToken
 		err = s.oauthRepo.CreateOAuthAccount(ctx, *account)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update OAuth account: %w", err)
 		}
-		
+
 		return user, nil
 	}
 
@@ -219,12 +221,12 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 			Name:  userResp.Name,
 			Email: userResp.Email,
 		}
-			
+
 		user, err = s.userRepo.CreateUser(ctx, input, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
-	} 
+	}
 
 	// Create OAuth account
 	oauthAccount := models.OAuthAccount{
@@ -251,8 +253,6 @@ func (s *OAuthService) AuthenticateGitHub(ctx context.Context, code string) (*mo
 
 	return user, nil
 }
-
-
 
 // AuthenticateGoogle handles Google OAuth authentication
 func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redirectURI string) (*models.User, error) {
@@ -314,14 +314,14 @@ func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redi
 
 	// Check if OAuth account exists
 	account, err := s.oauthRepo.GetOAuthAccount(ctx, "google", userResp.ID)
-	
+
 	if err == nil {
 		// Account exists, get associated user
 		user, err := s.userRepo.GetUserByID(ctx, account.UserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
-		
+
 		// Update the token
 		account.AccessToken = tokenResp.AccessToken
 		account.RefreshToken = tokenResp.RefreshToken
@@ -330,7 +330,7 @@ func (s *OAuthService) AuthenticateGoogle(ctx context.Context, code string, redi
 		if err != nil {
 			return nil, fmt.Errorf("failed to update OAuth account: %w", err)
 		}
-		
+
 		return user, nil
 	}
 

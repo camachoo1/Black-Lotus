@@ -9,6 +9,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  emailValidation,
+  passwordSignupValidation,
+  passwordValidation,
+} from '@/utils/validators';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -20,6 +25,10 @@ interface FormValues {
   password: string;
 }
 
+// API base URL for direct backend communication
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 export function AuthModal({
   children,
   initialMode = 'login',
@@ -29,46 +38,82 @@ export function AuthModal({
 }) {
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [open, setOpen] = useState(false);
-  const { refreshUser } = useAuth();
+  const { refreshUser, fetchWithCsrf } = useAuth();
 
   // Initialize React Hook Form
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<FormValues>({
     defaultValues: {
       name: '',
       email: '',
       password: '',
     },
+    mode: 'onBlur',
   });
 
   // Login/Signup mutation
   const authMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      const endpoint =
-        mode === 'login' ? '/api/login' : '/api/signup';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        credentials: 'include',
-      });
+      try {
+        const endpoint =
+          mode === 'login'
+            ? `${API_BASE}/api/login`
+            : `${API_BASE}/api/signup`;
 
-      if (!response.ok) {
-        const error = await response.json();
+        const response = await fetchWithCsrf(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        // If response is not OK
+        if (!response.ok) {
+          // For authentication failures (401)
+          if (response.status === 401) {
+            throw new Error(
+              'Invalid credentials. Please check your email and password and try again.'
+            );
+          }
+
+          // For other error responses, try to parse the error message
+          try {
+            const errorData = await response.json();
+            if (errorData.error) {
+              throw new Error(errorData.error);
+            }
+          } catch (jsonError) {
+            // If parsing fails, use a generic error message
+            console.error(jsonError);
+            throw new Error('An error occurred. Please try again.');
+          }
+        }
+
+        // If response is OK, return the parsed JSON
+        return await response.json();
+      } catch (error) {
+        // Rethrow errors
+        if (error instanceof Error) {
+          throw error;
+        }
         throw new Error(
-          error.error ||
-            `${mode === 'login' ? 'Login' : 'Signup'} failed`
+          'An unexpected error occurred. Please try again.'
         );
       }
-
-      return response.json();
     },
     onSuccess: () => {
       refreshUser();
-      setOpen(false); // Close modal on success
+      setOpen(false);
+    },
+    onError: () => {
+      setValue('password', '', {
+        shouldValidate: false,
+        shouldDirty: false,
+        shouldTouch: false,
+      });
     },
   });
 
@@ -76,68 +121,25 @@ export function AuthModal({
     setMode((prev) => (prev === 'login' ? 'signup' : 'login'));
   };
 
-  // THIS WILL CHANGE ONCE OAUTH IS SETUP
+  // OAuth handler
   const handleOAuth = (provider: 'google' | 'github' | 'apple') => {
     const returnTo = encodeURIComponent(window.location.pathname);
-    
+
+    // We'll still use our frontend routes for the OAuth flow
     if (provider === 'github') {
       window.location.href = `/auth/github?returnTo=${returnTo}`;
+    } else if (provider === 'google') {
+      window.location.href = `/auth/google?returnTo=${returnTo}`;
     } else {
-      window.location.href = `/api/auth/${provider}?returnTo=${returnTo}`;
+      window.location.href = `/auth/apple?returnTo=${returnTo}`;
     }
   };
 
   // Handles the submit logic
   const onSubmit = async (data: FormValues) => {
     try {
-      const endpoint =
-        mode === 'login' ? '/api/login' : '/api/signup';
-
-      const payload =
-        mode === 'login'
-          ? { email: data.email, password: data.password }
-          : {
-              name: data.name,
-              email: data.email,
-              password: data.password,
-            };
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        // Try to parse error response
-        let errorMessage = `${
-          mode === 'login' ? 'Login' : 'Signup'
-        } Failed`;
-        try {
-          const errorData = await response.json();
-          if (errorData.error) errorMessage = errorData.error;
-        } catch {
-          // Ignore JSON parsing errors and use default message
-          errorMessage += `: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      // Try to parse the success response
-      try {
-        await response.json();
-        // Update auth context
-        refreshUser();
-        // Close modal
-        setOpen(false);
-      } catch {
-        // If no JSON but response was OK, still consider it a success
-        refreshUser();
-        setOpen(false);
-      }
+      authMutation.mutate(data);
     } catch (error) {
-      // Handle any errors
       console.error('Authentication error:', error);
     }
   };
@@ -186,13 +188,7 @@ export function AuthModal({
 
           {/* INPUTS FOR FORM */}
           <input
-            {...register('email', {
-              required: 'Email is required',
-              pattern: {
-                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: 'Invalid email address',
-              },
-            })}
+            {...register('email', emailValidation)}
             type='email'
             placeholder='Email'
             required
@@ -205,13 +201,12 @@ export function AuthModal({
           )}
 
           <input
-            {...register('password', {
-              required: 'Password is required',
-              minLength: {
-                value: 8,
-                message: 'Password must be at least 8 characters',
-              },
-            })}
+            {...register(
+              'password',
+              mode === 'login'
+                ? passwordValidation
+                : passwordSignupValidation
+            )}
             type='password'
             placeholder='Password'
             required
@@ -235,9 +230,14 @@ export function AuthModal({
           </button>
 
           {authMutation.isError && (
-            <span className='text-red-500 text-xs'>
-              {authMutation.error.message}
-            </span>
+            <div
+              className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative mb-4'
+              role='alert'
+            >
+              <span className='block sm:inline'>
+                {authMutation.error.message}
+              </span>
+            </div>
           )}
         </form>
 

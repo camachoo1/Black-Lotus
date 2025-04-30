@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
-	"black-lotus/internal/services"
+	"black-lotus/internal/auth/services"
 )
 
 // OAuthController handles OAuth authentication endpoints
@@ -29,16 +31,19 @@ func (c *OAuthController) GetGitHubAuthURL(ctx echo.Context) error {
 	returnTo := ctx.QueryParam("returnTo")
 
 	if returnTo == "" {
-			returnTo = "/" // Default to home if not specified
+		returnTo = "/" // Default to home if not specified
 	}
+
 	// Get base URL from request for redirect
 	scheme := ctx.Scheme()
 	host := ctx.Request().Host
-	redirectURI := fmt.Sprintf("%s://%s/api/auth/github/callback?returnTo=%s", 
-    scheme, host, url.QueryEscape(returnTo))
-	
-	authURL := c.oauthService.GetAuthorizationURL("github", redirectURI)
-	
+
+	// Important: Use redirect URI without query parameters
+	redirectURI := fmt.Sprintf("%s://%s/api/auth/github/callback", scheme, host)
+
+	// Pass returnTo as state parameter for security
+	authURL := c.oauthService.GetAuthorizationURL("github", redirectURI, returnTo)
+
 	return ctx.JSON(http.StatusOK, map[string]string{
 		"url": authURL,
 	})
@@ -53,7 +58,7 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 			"error": "Missing code parameter",
 		})
 	}
-	
+
 	// Authenticate with GitHub
 	user, err := c.oauthService.AuthenticateGitHub(ctx.Request().Context(), code)
 	if err != nil {
@@ -61,7 +66,7 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 			"error": "Authentication failed: " + err.Error(),
 		})
 	}
-	
+
 	// Create session
 	session, err := c.sessionService.CreateSession(ctx.Request().Context(), user.ID)
 	if err != nil {
@@ -70,14 +75,25 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 		})
 	}
 
-	// Get returnTo from query params
-	returnTo := ctx.QueryParam("returnTo")
-	if returnTo == "" {
-			returnTo = "/" // Default to home
+	// Get state parameter (contains our returnTo value)
+	state := ctx.QueryParam("state")
+	returnTo := "/" // Default to callback page
+	if state != "" {
+		decodedState, err := url.QueryUnescape(state)
+		if err == nil {
+			// If we have a valid state, use it for returnTo
+			returnTo = decodedState
+		}
 	}
 
-	redirectURL := "http://localhost:3000" + returnTo
-	
+	// Get frontend URL from environment or use default
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+
+	redirectURL := frontendURL + "/auth/callback?returnTo=" + url.QueryEscape(returnTo)
+
 	// Set access token cookie
 	accessCookie := new(http.Cookie)
 	accessCookie.Name = "access_token"
@@ -86,8 +102,8 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 	accessCookie.Path = "/"
 	accessCookie.HttpOnly = true
 	accessCookie.Secure = true
-	accessCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
-	
+	accessCookie.SameSite = http.SameSiteLaxMode
+
 	// Set refresh token cookie
 	refreshCookie := new(http.Cookie)
 	refreshCookie.Name = "refresh_token"
@@ -96,24 +112,33 @@ func (c *OAuthController) HandleGitHubCallback(ctx echo.Context) error {
 	refreshCookie.Path = "/"
 	refreshCookie.HttpOnly = true
 	refreshCookie.Secure = true
-	refreshCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
-	
+	refreshCookie.SameSite = http.SameSiteLaxMode
+
 	ctx.SetCookie(accessCookie)
 	ctx.SetCookie(refreshCookie)
-	
+
 	// Redirect to frontend
-	return ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	return ctx.Redirect(http.StatusFound, redirectURL)
 }
 
 // GetGoogleAuthURL returns the Google OAuth URL
 func (c *OAuthController) GetGoogleAuthURL(ctx echo.Context) error {
+	returnTo := ctx.QueryParam("returnTo")
+
+	if returnTo == "" {
+		returnTo = "/" // Default to home if not specified
+	}
+
 	// Get base URL from request for redirect
 	scheme := ctx.Scheme()
 	host := ctx.Request().Host
-	redirectURI := scheme + "://" + host + "/api/auth/google/callback"
-	
-	authURL := c.oauthService.GetAuthorizationURL("google", redirectURI)
-	
+
+	// Important: Use redirect URI without query parameters
+	redirectURI := fmt.Sprintf("%s://%s/api/auth/google/callback", scheme, host)
+
+	// Pass returnTo as state parameter for security
+	authURL := c.oauthService.GetAuthorizationURL("google", redirectURI, returnTo)
+
 	return ctx.JSON(http.StatusOK, map[string]string{
 		"url": authURL,
 	})
@@ -128,12 +153,23 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 			"error": "Missing code parameter",
 		})
 	}
-	
+
+	// Get state parameter (contains our returnTo value)
+	state := ctx.QueryParam("state")
+	returnTo := "/auth/callback" // Default to callback page
+	if state != "" {
+		decodedState, err := url.QueryUnescape(state)
+		if err == nil {
+			// If we have a valid state, use it for returnTo
+			returnTo = "/auth/callback?returnTo=" + url.QueryEscape(decodedState)
+		}
+	}
+
 	// Get redirect URI (must match the one used to get auth URL)
 	scheme := ctx.Scheme()
 	host := ctx.Request().Host
-	redirectURI := scheme + "://" + host + "/api/auth/google/callback"
-	
+	redirectURI := fmt.Sprintf("%s://%s/api/auth/google/callback", scheme, host)
+
 	// Authenticate with Google
 	user, err := c.oauthService.AuthenticateGoogle(ctx.Request().Context(), code, redirectURI)
 	if err != nil {
@@ -141,7 +177,7 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 			"error": "Authentication failed: " + err.Error(),
 		})
 	}
-	
+
 	// Create session
 	session, err := c.sessionService.CreateSession(ctx.Request().Context(), user.ID)
 	if err != nil {
@@ -149,7 +185,20 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 			"error": "Failed to create session",
 		})
 	}
-	
+
+	// Get frontend URL from environment or use default
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+
+	// If multiple URLs are configured, use the first one
+	if strings.Contains(frontendURL, ",") {
+		frontendURL = strings.Split(frontendURL, ",")[0]
+	}
+
+	redirectURL := frontendURL + returnTo
+
 	// Set access token cookie
 	accessCookie := new(http.Cookie)
 	accessCookie.Name = "access_token"
@@ -158,8 +207,8 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 	accessCookie.Path = "/"
 	accessCookie.HttpOnly = true
 	accessCookie.Secure = true
-	accessCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
-	
+	accessCookie.SameSite = http.SameSiteLaxMode // Critical for OAuth
+
 	// Set refresh token cookie
 	refreshCookie := new(http.Cookie)
 	refreshCookie.Name = "refresh_token"
@@ -168,11 +217,11 @@ func (c *OAuthController) HandleGoogleCallback(ctx echo.Context) error {
 	refreshCookie.Path = "/"
 	refreshCookie.HttpOnly = true
 	refreshCookie.Secure = true
-	refreshCookie.SameSite = http.SameSiteLaxMode // Changed from StrictMode for OAuth
-	
+	refreshCookie.SameSite = http.SameSiteLaxMode // Critical for OAuth
+
 	ctx.SetCookie(accessCookie)
 	ctx.SetCookie(refreshCookie)
-	
+
 	// Redirect to frontend
-	return ctx.Redirect(http.StatusTemporaryRedirect, "/")
+	return ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
