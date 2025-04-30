@@ -18,7 +18,7 @@ func main() {
 	if err := db.Initialize(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	
+
 	defer db.Close()
 	log.Println("Successfully connected to PostgreSQL")
 
@@ -28,25 +28,26 @@ func main() {
 
 	// Initialize Echo
 	e := echo.New()
-	
+
 	// Add middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-        AllowOrigins:     []string{"http://localhost:3000"},
-        AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
-        AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, "X-CSRF-TOKEN"},
-				ExposeHeaders: []string{"Set-Cookie"},
-        AllowCredentials: true, // This is crucial for sending cookies
-    }))
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, "X-CSRF-TOKEN"},
+		ExposeHeaders:    []string{"Set-Cookie"},
+		AllowCredentials: true,  // This is crucial for sending cookies
+		MaxAge:           86400, // 1 day to cache preflight requests
+	}))
 	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
-				TokenLookup:    "header:X-CSRF-Token",
-				CookieName:     "csrf_token",
-				CookiePath:     "/",
-				CookieHTTPOnly: false,
-				CookieMaxAge:   3600,  // 1 hour
-		}))
-	
+		TokenLookup:    "header:X-CSRF-Token",
+		CookieName:     "csrf_token",
+		CookiePath:     "/",
+		CookieHTTPOnly: false,
+		CookieMaxAge:   3600, // 1 hour
+	}))
+
 	// Rate limiting to prevent abuse
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(20))) // 20 requests per second
 

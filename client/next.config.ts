@@ -6,11 +6,6 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL:
       process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
   },
-  // Ensure images from your domain are allowed
-  images: {
-    domains: ['localhost'],
-  },
-  // Enable CORS headers if needed
   async headers() {
     return [
       {

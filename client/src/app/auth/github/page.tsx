@@ -1,28 +1,42 @@
 'use client';
-
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+
+// API base URL for direct backend communication
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export default function GitHubAuth() {
   const searchParams = useSearchParams();
-  const router = useRouter()
+  const router = useRouter();
+  const { isLoading } = useAuth();
 
   useEffect(() => {
-    console.log('Fetching auth url')
+    if (isLoading) return;
+
+    console.log('Fetching auth url');
+
     const fetchAuthUrl = async () => {
       try {
         const returnTo = searchParams.get('returnTo') || '/';
 
-        // Get the GitHub auth URL
+        // Get the GitHub auth URL directly from the Go backend
         const response = await fetch(
-          `/api/auth/github?returnTo=${encodeURIComponent(returnTo)}`
+          `${API_BASE}/api/auth/github?returnTo=${encodeURIComponent(
+            returnTo
+          )}`,
+          {
+            credentials: 'include',
+          }
         );
+
         const data = await response.json();
 
         // Redirect to GitHub
         if (data.url) {
-          console.log('data.url:', data.url)
-          router.push(data.url)
+          console.log('data.url:', data.url);
+          window.location.href = data.url;
         } else {
           console.error('No GitHub authorization URL returned');
         }
@@ -32,7 +46,7 @@ export default function GitHubAuth() {
     };
 
     fetchAuthUrl();
-  }, [searchParams, router]);
+  }, [searchParams, router, isLoading]);
 
   return (
     <div className='flex flex-col items-center justify-center min-h-screen'>

@@ -11,6 +11,10 @@ let isRefreshing = false;
 // Queue of requests waiting for token refresh
 let refreshQueue: Array<(err?: Error | null) => void> = [];
 
+// API base URL for direct backend communication
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 // Combined hook that handles authentication, token refresh and CSRF
 export const useAuthCheck = () => {
   const [csrfToken, setCsrfToken] = useState('');
@@ -23,7 +27,7 @@ export const useAuthCheck = () => {
     async function fetchCsrfToken() {
       try {
         setCsrfLoading(true);
-        const response = await fetch('/api/csrf-token', {
+        const response = await fetch(`${API_BASE}/api/csrf-token`, {
           credentials: 'include',
         });
 
@@ -52,7 +56,7 @@ export const useAuthCheck = () => {
   // Function to refresh access token
   const refreshAccessToken = async (): Promise<boolean> => {
     try {
-      const response = await fetch('/api/refresh-token', {
+      const response = await fetch(`${API_BASE}/api/refresh-token`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -76,6 +80,11 @@ export const useAuthCheck = () => {
     url: string,
     options: FetchOptions = {}
   ) => {
+    // Ensure the URL is absolute (points to the Go backend)
+    const absoluteUrl = url.startsWith('http')
+      ? url
+      : `${API_BASE}${url.startsWith('/') ? url : '/' + url}`;
+
     // Add CSRF token to headers
     const headers = {
       ...options.headers,
@@ -83,7 +92,7 @@ export const useAuthCheck = () => {
     };
 
     // First attempt
-    const response = await fetch(url, {
+    const response = await fetch(absoluteUrl, {
       ...options,
       headers,
       credentials: 'include',
@@ -122,7 +131,7 @@ export const useAuthCheck = () => {
           }
 
           // Retry original request with new token
-          return fetch(url, {
+          return fetch(absoluteUrl, {
             ...options,
             headers,
             credentials: 'include',
@@ -148,7 +157,7 @@ export const useAuthCheck = () => {
         return null;
       }
 
-      const response = await fetchWithCsrf('/api/profile');
+      const response = await fetchWithCsrf(`${API_BASE}/api/profile`);
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -168,7 +177,7 @@ export const useAuthCheck = () => {
   const refreshCsrfToken = async () => {
     try {
       setCsrfLoading(true);
-      const response = await fetch('/api/csrf-token', {
+      const response = await fetch(`${API_BASE}/api/csrf-token`, {
         credentials: 'include',
       });
 
@@ -201,7 +210,9 @@ export const useAuthCheck = () => {
   // Logout function
   const logout = async () => {
     try {
-      await fetchWithCsrf('/api/logout', { method: 'POST' });
+      await fetchWithCsrf(`${API_BASE}/api/logout`, {
+        method: 'POST',
+      });
       queryClient.setQueryData(['authUser'], null);
     } catch (error) {
       console.error('Logout error:', error);
