@@ -51,6 +51,7 @@ func (r *TripRepository) CreateTrip(ctx context.Context, userID uuid.UUID, input
 	return trip, nil
 }
 
+// GetTripByID returns a specific trip based on ID
 func (r *TripRepository) GetTripByID(ctx context.Context, tripID uuid.UUID) (*models.Trip, error) {
 	trip := new(models.Trip)
 
@@ -59,6 +60,49 @@ func (r *TripRepository) GetTripByID(ctx context.Context, tripID uuid.UUID) (*mo
         FROM trips
         WHERE id = $1
     `, tripID).Scan(
+		&trip.ID,
+		&trip.UserID,
+		&trip.Name,
+		&trip.Description,
+		&trip.StartDate,
+		&trip.EndDate,
+		&trip.Destination,
+		&trip.CreatedAt,
+		&trip.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("trip not found")
+		}
+		return nil, err
+	}
+
+	return trip, nil
+}
+
+// UpdateTrip updates an existing trip
+func (r *TripRepository) UpdateTrip(ctx context.Context, tripID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error) {
+	trip := new(models.Trip)
+
+	err := r.db.QueryRow(ctx, `
+        UPDATE trips
+        SET 
+            name = COALESCE($1, name),
+            description = COALESCE($2, description),
+            start_date = COALESCE($3, start_date),
+            end_date = COALESCE($4, end_date),
+            destination = COALESCE($5, destination),
+            updated_at = NOW()
+        WHERE id = $6
+        RETURNING id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+    `,
+		input.Name,
+		input.Description,
+		input.StartDate,
+		input.EndDate,
+		input.Destination,
+		tripID).Scan(
 		&trip.ID,
 		&trip.UserID,
 		&trip.Name,
