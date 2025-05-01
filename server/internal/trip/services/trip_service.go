@@ -39,3 +39,18 @@ func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input mo
 
 	return trip, nil
 }
+
+// GetTripByID retrieves a trip by ID, with ownership verification
+func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error) {
+	trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify ownership
+	if trip.UserID != userID {
+		return nil, errors.New("unauthorized access to trip")
+	}
+
+	return trip, nil
+}
