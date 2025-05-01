@@ -32,7 +32,7 @@ func (r *SessionRepository) CreateSession(
 	accessDuration time.Duration,
 	refreshDuration time.Duration,
 ) (*models.Session, error) {
-	var session models.Session
+	session := new(models.Session)
 
 	// Generate access token
 	accessTokenBytes := make([]byte, 32)
@@ -77,12 +77,12 @@ func (r *SessionRepository) CreateSession(
 	session.AccessToken = accessToken
 	session.RefreshToken = refreshToken
 
-	return &session, nil
+	return session, nil
 }
 
 // GetSessionByAccessToken retrieves a session using an access token
 func (r *SessionRepository) GetSessionByAccessToken(ctx context.Context, token string) (*models.Session, error) {
-	var session models.Session
+	session := new(models.Session)
 
 	// Hash the token
 	hash := sha256.Sum256([]byte(token))
@@ -105,12 +105,12 @@ func (r *SessionRepository) GetSessionByAccessToken(ctx context.Context, token s
 		return nil, err
 	}
 
-	return &session, nil
+	return session, nil
 }
 
 // GetSessionByRefreshToken retrieves a session using a refresh token
 func (r *SessionRepository) GetSessionByRefreshToken(ctx context.Context, token string) (*models.Session, error) {
-	var session models.Session
+	session := new(models.Session)
 
 	// Hash the token
 	hash := sha256.Sum256([]byte(token))
@@ -133,12 +133,12 @@ func (r *SessionRepository) GetSessionByRefreshToken(ctx context.Context, token 
 		return nil, err
 	}
 
-	return &session, nil
+	return session, nil
 }
 
 // RefreshAccessToken generates a new access token for a session
 func (r *SessionRepository) RefreshAccessToken(ctx context.Context, sessionID uuid.UUID) (*models.Session, error) {
-	var session models.Session
+	session := new(models.Session)
 
 	// Generate new access token
 	tokenBytes := make([]byte, 32)
@@ -174,7 +174,7 @@ func (r *SessionRepository) RefreshAccessToken(ctx context.Context, sessionID uu
 	// Set the new access token
 	session.AccessToken = accessToken
 
-	return &session, nil
+	return session, nil
 }
 
 // DeleteSessionByAccessToken removes a session using its access token
@@ -214,18 +214,5 @@ func (r *SessionRepository) DeleteUserSessions(ctx context.Context, userID uuid.
 		WHERE user_id = $1
 	`, userID)
 
-	return err
-}
-
-func (r *SessionRepository) DeleteSessionByToken(ctx context.Context, token string) error {
-	// Hash the token first
-	hash := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(hash[:])
-
-	// Delete using the token hash
-	_, err := r.db.Exec(ctx, `
-        DELETE FROM sessions
-        WHERE token_hash = $1
-    `, tokenHash)
 	return err
 }

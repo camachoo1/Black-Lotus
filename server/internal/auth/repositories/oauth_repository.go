@@ -42,7 +42,7 @@ func (r *OAuthRepository) CreateOAuthAccount(ctx context.Context, account models
 
 // GetOAuthAccount gets the OAuth account by provider and the provider user ID
 func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, providerUserID string) (*models.OAuthAccount, error) {
-	var account models.OAuthAccount
+	account := new(models.OAuthAccount)
 
 	err := r.db.QueryRow(ctx, `
 		SELECT provider_id, provider_user_id, user_id, 
@@ -64,12 +64,11 @@ func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, provi
 		return nil, err
 	}
 
-	return &account, nil
+	return account, nil
 }
 
 // GetUserOAuthAccounts gets all OAuth accounts for a specific user
 func (r *OAuthRepository) GetUserOAuthAccounts(ctx context.Context, userID uuid.UUID) ([]models.OAuthAccount, error) {
-
 	rows, err := r.db.Query(ctx, `
 		SELECT provider_id, provider_user_id, user_id, 
 			access_token, refresh_token, expires_at, created_at, updated_at
