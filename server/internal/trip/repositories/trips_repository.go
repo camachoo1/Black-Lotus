@@ -123,3 +123,21 @@ func (r *TripRepository) UpdateTrip(ctx context.Context, tripID uuid.UUID, input
 
 	return trip, nil
 }
+
+// DeleteTrip removes trip from DB.
+func (r *TripRepository) DeleteTrip(ctx context.Context, tripID uuid.UUID) error {
+	commandTag, err := r.db.Exec(ctx, `
+        DELETE FROM trips
+        WHERE id = $1
+    `, tripID)
+
+	if err != nil {
+		return err
+	}
+
+	if commandTag.RowsAffected() == 0 {
+		return errors.New("trip not found")
+	}
+
+	return nil
+}
