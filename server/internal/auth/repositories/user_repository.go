@@ -46,7 +46,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, input models.CreateUser
 
 // LoginUser verifies credentials and returns the user if valid
 func (r *UserRepository) LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error) {
-	var user models.User
+	user := new(models.User)
 	var hashedPassword string
 
 	// Retrieve user and hashed password from database
@@ -77,11 +77,11 @@ func (r *UserRepository) LoginUser(ctx context.Context, input models.LoginUserIn
 	}
 
 	// Success - don't include password hash in returned user
-	return &user, nil
+	return user, nil
 }
 
 func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) {
-	var user models.User
+	user := new(models.User)
 
 	err := r.db.QueryRow(ctx, `
         SELECT id, name, email, hashed_password, email_verified, created_at, updated_at
@@ -101,11 +101,11 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*mo
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
-	var user models.User
+	user := new(models.User)
 
 	err := r.db.QueryRow(ctx, `
 		SELECT id, name, email, hashed_password, email_verified, created_at, updated_at
@@ -128,7 +128,7 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
 // Changing verified email to true - used for oauth (will implement verification email later)
