@@ -21,7 +21,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error) {
-	var user models.User
+	user := new(models.User)
 
 	err := r.db.QueryRow(ctx, `
         INSERT INTO users (name, email, hashed_password)
@@ -41,7 +41,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, input models.CreateUser
 		return nil, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
 // LoginUser verifies credentials and returns the user if valid
