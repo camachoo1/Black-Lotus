@@ -83,3 +83,18 @@ func (s *TripService) UpdateTrip(ctx context.Context, tripID uuid.UUID, userID u
 	// Update the trip
 	return s.tripRepo.UpdateTrip(ctx, tripID, input)
 }
+
+// DeleteTrip deletes a trip with ownership verification
+func (s *TripService) DeleteTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) error {
+	// Verify ownership of the trip
+	trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return err
+	}
+
+	if trip.UserID != userID {
+		return errors.New("unauthorized access to trip")
+	}
+
+	return s.tripRepo.DeleteTrip(ctx, tripID)
+}
