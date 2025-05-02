@@ -40,21 +40,6 @@ func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input mo
 	return trip, nil
 }
 
-// GetTripByID retrieves a trip by ID, with ownership verification
-func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error) {
-	trip, err := s.tripRepo.GetTripByID(ctx, tripID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Verify ownership
-	if trip.UserID != userID {
-		return nil, errors.New("unauthorized access to trip")
-	}
-
-	return trip, nil
-}
-
 // UpdateTrip updates a trip with ownership verification
 func (s *TripService) UpdateTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error) {
 	// First, verify ownership
@@ -97,4 +82,19 @@ func (s *TripService) DeleteTrip(ctx context.Context, tripID uuid.UUID, userID u
 	}
 
 	return s.tripRepo.DeleteTrip(ctx, tripID)
+}
+
+// GetTripByID retrieves a trip by ID, with ownership verification
+func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error) {
+	trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify ownership
+	if trip.UserID != userID {
+		return nil, errors.New("unauthorized access to trip")
+	}
+
+	return trip, nil
 }
