@@ -1,9 +1,9 @@
-package api
+package routes
 
 import (
 	"github.com/labstack/echo/v4"
 
-	"black-lotus/api/controllers"
+	controllers "black-lotus/api/controllers/auth"
 	"black-lotus/api/middleware"
 	"black-lotus/db"
 	"black-lotus/internal/auth/repositories"
@@ -44,19 +44,4 @@ func AuthRoutes(e *echo.Echo) {
 	protected := e.Group("/api")
 	protected.Use(authMiddleware.Authenticate)
 	protected.GET("/profile", userController.GetUserProfile)
-
-	// Test Routes
-	e.GET("/oauth-test", func(c echo.Context) error {
-		// Set CORS headers to allow access if needed
-		c.Response().Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		c.Response().Header().Set("Access-Control-Allow-Credentials", "true")
-
-		return c.File("public/oauth-test.html")
-	})
-
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{
-			"status": "healthy",
-		})
-	})
 }
