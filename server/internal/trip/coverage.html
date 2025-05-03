@@ -57,6 +57,8 @@
 				
 				<option value="file0">black-lotus/internal/trip/repositories/trip_repository.go (81.0%)</option>
 				
+				<option value="file1">black-lotus/internal/trip/services/trip_service.go (94.1%)</option>
+				
 				</select>
 			</div>
 			<div id="legend">
@@ -273,6 +275,112 @@ func (r *TripRepository) GetTripsByUserID(ctx context.Context, userID uuid.UUID,
         }</span>
 
         <span class="cov8" title="1">return trips, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package services
+
+import (
+        "context"
+        "errors"
+        "fmt"
+
+        "github.com/google/uuid"
+
+        "black-lotus/internal/trip/models"
+        "black-lotus/internal/trip/repositories"
+)
+
+/*
+*
+IMPLEMENTED FOR TESTING PURPOSES
+*/
+type TripService struct {
+        tripRepo repositories.TripRepositoryInterface
+}
+
+func NewTripService(tripRepo repositories.TripRepositoryInterface) *TripService <span class="cov8" title="1">{
+        return &amp;TripService{tripRepo: tripRepo}
+}</span>
+
+func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error) <span class="cov8" title="1">{
+        // Validate dates from user
+        if input.EndDate.Before(input.StartDate) </span><span class="cov8" title="1">{
+                return nil, errors.New("end date cannot be before start date")
+        }</span>
+
+        // If name is empty, we generate a default name for the Trip
+        <span class="cov8" title="1">if input.Name == "" </span><span class="cov8" title="1">{
+                input.Name = fmt.Sprintf("Trip to %s", input.Destination)
+        }</span>
+
+        // Create the trip in the DB
+        <span class="cov8" title="1">trip, err := s.tripRepo.CreateTrip(ctx, userID, input)
+
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return trip, nil</span>
+}
+
+// UpdateTrip updates a trip with ownership verification
+func (s *TripService) UpdateTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error) <span class="cov8" title="1">{
+        // First, verify ownership
+        trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if trip.UserID != userID </span><span class="cov8" title="1">{
+                return nil, errors.New("unauthorized access to trip")
+        }</span>
+
+        // If updating dates, validate them
+        <span class="cov8" title="1">if input.StartDate != nil &amp;&amp; input.EndDate != nil </span><span class="cov8" title="1">{
+                if input.EndDate.Before(*input.StartDate) </span><span class="cov8" title="1">{
+                        return nil, errors.New("end date cannot be before start date")
+                }</span>
+        } else<span class="cov8" title="1"> if input.StartDate != nil &amp;&amp; trip.EndDate.Before(*input.StartDate) </span><span class="cov8" title="1">{
+                return nil, errors.New("end date cannot be before start date")
+        }</span> else<span class="cov8" title="1"> if input.EndDate != nil &amp;&amp; input.EndDate.Before(trip.StartDate) </span><span class="cov8" title="1">{
+                return nil, errors.New("end date cannot be before start date")
+        }</span>
+
+        // TODO: validate location if it's being updated!!
+
+        // Update the trip
+        <span class="cov8" title="1">return s.tripRepo.UpdateTrip(ctx, tripID, input)</span>
+}
+
+// DeleteTrip deletes a trip with ownership verification
+func (s *TripService) DeleteTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) error <span class="cov8" title="1">{
+        // Verify ownership of the trip
+        trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if trip.UserID != userID </span><span class="cov8" title="1">{
+                return errors.New("unauthorized access to trip")
+        }</span>
+
+        <span class="cov8" title="1">return s.tripRepo.DeleteTrip(ctx, tripID)</span>
+}
+
+// GetTripByID retrieves a trip by ID, with ownership verification
+func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error) <span class="cov8" title="1">{
+        trip, err := s.tripRepo.GetTripByID(ctx, tripID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Verify ownership
+        <span class="cov8" title="1">if trip.UserID != userID </span><span class="cov8" title="1">{
+                return nil, errors.New("unauthorized access to trip")
+        }</span>
+
+        <span class="cov0" title="0">return trip, nil</span>
 }
 </pre>
 		

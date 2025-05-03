@@ -73,7 +73,7 @@ func initTestSchema() error {
         -- Enable UUID extension if not already enabled
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
         
-        -- Users table (simplified for testing)
+        -- Users table
         CREATE TABLE IF NOT EXISTS users (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             name VARCHAR(100) NOT NULL,
@@ -81,7 +81,45 @@ func initTestSchema() error {
             hashed_password VARCHAR(255) DEFAULT NULL,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+						CONSTRAINT email_format_check 
+        		CHECK (email ~* '^[A-Za-z0-9._%-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,4}$')
+        );
+        
+        -- OAuth accounts table
+        CREATE TABLE IF NOT EXISTS oauth_accounts (
+            provider_id VARCHAR(100) NOT NULL,
+            provider_user_id VARCHAR(100) NOT NULL,
+            user_id UUID NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT DEFAULT NULL,
+            expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (provider_id, provider_user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        
+        -- Sessions table - updated for access & refresh tokens
+        CREATE TABLE IF NOT EXISTS sessions (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL,
+            access_token_hash VARCHAR(255),
+            refresh_token_hash VARCHAR(255),
+            access_expires_at TIMESTAMP WITH TIME ZONE,
+            refresh_expires_at TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        
+        -- Email verification table
+        CREATE TABLE IF NOT EXISTS email_verifications (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            code VARCHAR(100) NOT NULL,
+            user_id UUID NOT NULL UNIQUE,
+            expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         -- Trips table
@@ -97,6 +135,15 @@ func initTestSchema() error {
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+				-- Create indexes for better performance
+        CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_access_expires_at ON sessions(access_expires_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_refresh_expires_at ON sessions(refresh_expires_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_access_token_hash ON sessions(access_token_hash);
+        CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token_hash ON sessions(refresh_token_hash);
+        CREATE INDEX IF NOT EXISTS idx_email_verifications_expires_at ON email_verifications(expires_at);
     `)
 
 	return err

@@ -68,7 +68,7 @@ func (r *OAuthRepository) GetOAuthAccount(ctx context.Context, providerID, provi
 }
 
 // GetUserOAuthAccounts gets all OAuth accounts for a specific user
-func (r *OAuthRepository) GetUserOAuthAccounts(ctx context.Context, userID uuid.UUID) ([]models.OAuthAccount, error) {
+func (r *OAuthRepository) GetUserOAuthAccounts(ctx context.Context, userID uuid.UUID) ([]*models.OAuthAccount, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT provider_id, provider_user_id, user_id, 
 			access_token, refresh_token, expires_at, created_at, updated_at
@@ -81,9 +81,9 @@ func (r *OAuthRepository) GetUserOAuthAccounts(ctx context.Context, userID uuid.
 	}
 	defer rows.Close()
 
-	var accounts []models.OAuthAccount
+	accounts := []*models.OAuthAccount{}
 	for rows.Next() {
-		var account models.OAuthAccount
+		account := &models.OAuthAccount{}
 		err := rows.Scan(
 			&account.ProviderID,
 			&account.ProviderUserID,
