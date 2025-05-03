@@ -20,6 +20,16 @@ type SessionRepository struct {
 	db *pgxpool.Pool // Database connection pool
 }
 
+type SessionRepositoryInterface interface {
+	CreateSession(ctx context.Context, userID uuid.UUID, accessDuration, refreshDuration time.Duration) (*models.Session, error)
+	GetSessionByAccessToken(ctx context.Context, token string) (*models.Session, error)
+	GetSessionByRefreshToken(ctx context.Context, token string) (*models.Session, error)
+	RefreshAccessToken(ctx context.Context, sessionID uuid.UUID) (*models.Session, error)
+	DeleteSessionByAccessToken(ctx context.Context, token string) error
+	DeleteSessionByRefreshToken(ctx context.Context, token string) error
+	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
+}
+
 // NewSessionRepository creates a new repository with the given database connection
 func NewSessionRepository(db *pgxpool.Pool) *SessionRepository {
 	return &SessionRepository{db: db}

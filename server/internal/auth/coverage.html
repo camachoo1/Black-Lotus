@@ -63,7 +63,7 @@
 				
 				<option value="file3">black-lotus/internal/auth/services/oauth_service.go (0.0%)</option>
 				
-				<option value="file4">black-lotus/internal/auth/services/session_service.go (0.0%)</option>
+				<option value="file4">black-lotus/internal/auth/services/session_service.go (100.0%)</option>
 				
 				<option value="file5">black-lotus/internal/auth/services/user_service.go (92.9%)</option>
 				
@@ -207,6 +207,16 @@ import (
 // SessionRepository handles database operations for sessions
 type SessionRepository struct {
         db *pgxpool.Pool // Database connection pool
+}
+
+type SessionRepositoryInterface interface {
+        CreateSession(ctx context.Context, userID uuid.UUID, accessDuration, refreshDuration time.Duration) (*models.Session, error)
+        GetSessionByAccessToken(ctx context.Context, token string) (*models.Session, error)
+        GetSessionByRefreshToken(ctx context.Context, token string) (*models.Session, error)
+        RefreshAccessToken(ctx context.Context, sessionID uuid.UUID) (*models.Session, error)
+        DeleteSessionByAccessToken(ctx context.Context, token string) error
+        DeleteSessionByRefreshToken(ctx context.Context, token string) error
+        DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 }
 
 // NewSessionRepository creates a new repository with the given database connection
@@ -958,18 +968,18 @@ import (
 
 // SessionService coordinates business logic for session management
 type SessionService struct {
-        sessionRepo *repositories.SessionRepository
+        sessionRepo repositories.SessionRepositoryInterface
 }
 
 // NewSessionService creates a new session service
-func NewSessionService(sessionRepo *repositories.SessionRepository) *SessionService <span class="cov0" title="0">{
+func NewSessionService(sessionRepo repositories.SessionRepositoryInterface) *SessionService <span class="cov8" title="1">{
         return &amp;SessionService{
                 sessionRepo: sessionRepo,
         }
 }</span>
 
 // CreateSession creates a new session with both access and refresh tokens
-func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID) (*models.Session, error) <span class="cov0" title="0">{
+func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID) (*models.Session, error) <span class="cov8" title="1">{
         // Access token - short-lived (1 hour)
         accessDuration := 1 * time.Hour
         // Refresh token - long-lived (7 days)
@@ -979,39 +989,39 @@ func (s *SessionService) CreateSession(ctx context.Context, userID uuid.UUID) (*
 }</span>
 
 // ValidateAccessToken checks if an access token is valid
-func (s *SessionService) ValidateAccessToken(ctx context.Context, token string) (*models.Session, error) <span class="cov0" title="0">{
+func (s *SessionService) ValidateAccessToken(ctx context.Context, token string) (*models.Session, error) <span class="cov8" title="1">{
         return s.sessionRepo.GetSessionByAccessToken(ctx, token)
 }</span>
 
 // ValidateRefreshToken checks if a refresh token is valid
-func (s *SessionService) ValidateRefreshToken(ctx context.Context, token string) (*models.Session, error) <span class="cov0" title="0">{
+func (s *SessionService) ValidateRefreshToken(ctx context.Context, token string) (*models.Session, error) <span class="cov8" title="1">{
         return s.sessionRepo.GetSessionByRefreshToken(ctx, token)
 }</span>
 
 // RefreshAccessToken uses a refresh token to generate a new access token
-func (s *SessionService) RefreshAccessToken(ctx context.Context, refreshToken string) (*models.Session, error) <span class="cov0" title="0">{
+func (s *SessionService) RefreshAccessToken(ctx context.Context, refreshToken string) (*models.Session, error) <span class="cov8" title="1">{
         // First validate the refresh token
         session, err := s.ValidateRefreshToken(ctx, refreshToken)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return nil, err
         }</span>
 
         // Generate a new access token
-        <span class="cov0" title="0">return s.sessionRepo.RefreshAccessToken(ctx, session.ID)</span>
+        <span class="cov8" title="1">return s.sessionRepo.RefreshAccessToken(ctx, session.ID)</span>
 }
 
 // EndSessionByAccessToken terminates a session by its access token
-func (s *SessionService) EndSessionByAccessToken(ctx context.Context, token string) error <span class="cov0" title="0">{
+func (s *SessionService) EndSessionByAccessToken(ctx context.Context, token string) error <span class="cov8" title="1">{
         return s.sessionRepo.DeleteSessionByAccessToken(ctx, token)
 }</span>
 
 // EndSessionByRefreshToken terminates a session by its refresh token
-func (s *SessionService) EndSessionByRefreshToken(ctx context.Context, token string) error <span class="cov0" title="0">{
+func (s *SessionService) EndSessionByRefreshToken(ctx context.Context, token string) error <span class="cov8" title="1">{
         return s.sessionRepo.DeleteSessionByRefreshToken(ctx, token)
 }</span>
 
 // EndAllUserSessions terminates all sessions for a user
-func (s *SessionService) EndAllUserSessions(ctx context.Context, userID uuid.UUID) error <span class="cov0" title="0">{
+func (s *SessionService) EndAllUserSessions(ctx context.Context, userID uuid.UUID) error <span class="cov8" title="1">{
         return s.sessionRepo.DeleteUserSessions(ctx, userID)
 }</span>
 </pre>

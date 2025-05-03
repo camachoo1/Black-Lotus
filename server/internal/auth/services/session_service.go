@@ -12,11 +12,11 @@ import (
 
 // SessionService coordinates business logic for session management
 type SessionService struct {
-	sessionRepo *repositories.SessionRepository
+	sessionRepo repositories.SessionRepositoryInterface
 }
 
 // NewSessionService creates a new session service
-func NewSessionService(sessionRepo *repositories.SessionRepository) *SessionService {
+func NewSessionService(sessionRepo repositories.SessionRepositoryInterface) *SessionService {
 	return &SessionService{
 		sessionRepo: sessionRepo,
 	}
