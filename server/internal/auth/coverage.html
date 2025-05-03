@@ -65,7 +65,7 @@
 				
 				<option value="file4">black-lotus/internal/auth/services/session_service.go (0.0%)</option>
 				
-				<option value="file5">black-lotus/internal/auth/services/user_service.go (0.0%)</option>
+				<option value="file5">black-lotus/internal/auth/services/user_service.go (92.9%)</option>
 				
 				<option value="file6">black-lotus/internal/auth/validators/auth_validators.go (0.0%)</option>
 				
@@ -423,6 +423,16 @@ import (
 
 type UserRepository struct {
         db *pgxpool.Pool
+}
+
+/*
+IMPLEMENTED FOR TESTING PURPOSES
+*/
+type UserRepositoryInterface interface {
+        CreateUser(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error)
+        LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
+        GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
+        GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 }
 
 func NewUserRepository(db *pgxpool.Pool) *UserRepository <span class="cov8" title="1">{
@@ -1019,74 +1029,74 @@ import (
 )
 
 type UserService struct {
-        userRepo *repositories.UserRepository
+        userRepo repositories.UserRepositoryInterface
 }
 
-func NewUserService(userRepo *repositories.UserRepository) *UserService <span class="cov0" title="0">{
+func NewUserService(userRepo repositories.UserRepositoryInterface) *UserService <span class="cov8" title="1">{
         return &amp;UserService{userRepo: userRepo}
 }</span>
 
-func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInput) (*models.User, error) <span class="cov0" title="0">{
+func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInput) (*models.User, error) <span class="cov8" title="1">{
         // Check if user already exists with this email
         existingUser, err := s.userRepo.GetUserByEmail(ctx, input.Email)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
 
-        <span class="cov0" title="0">if existingUser != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if existingUser != nil </span><span class="cov8" title="1">{
                 return nil, errors.New("user with this email already exists")
         }</span>
 
         // Hash password if provided
-        <span class="cov0" title="0">var hashedPassword *string
-        if input.Password != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">var hashedPassword *string
+        if input.Password != nil </span><span class="cov8" title="1">{
                 hash, err := bcrypt.GenerateFromPassword([]byte(*input.Password), bcrypt.DefaultCost)
                 if err != nil </span><span class="cov0" title="0">{
                         return nil, err
                 }</span>
 
-                <span class="cov0" title="0">hashStr := string(hash)
+                <span class="cov8" title="1">hashStr := string(hash)
                 hashedPassword = &amp;hashStr</span>
         }
 
         // Create user
-        <span class="cov0" title="0">user, err := s.userRepo.CreateUser(ctx, input, hashedPassword)
-        if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">user, err := s.userRepo.CreateUser(ctx, input, hashedPassword)
+        if err != nil </span><span class="cov8" title="1">{
                 return nil, err
         }</span>
 
         // Remove sensitive data before returning
-        <span class="cov0" title="0">user.HashedPassword = nil
+        <span class="cov8" title="1">user.HashedPassword = nil
 
         return user, nil</span>
 }
 
 // LoginUser authenticates a user and returns the user if successful
-func (s *UserService) LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error) <span class="cov0" title="0">{
+func (s *UserService) LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error) <span class="cov8" title="1">{
         // Get user by email and password
         user, err := s.userRepo.LoginUser(ctx, input)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return nil, err
         }</span>
 
         // You could add additional checks here if needed
         // For example, check if email is verified
-        <span class="cov0" title="0">if !user.EmailVerified </span>{<span class="cov0" title="0">
+        <span class="cov8" title="1">if !user.EmailVerified </span>{<span class="cov8" title="1">
                 // Decide whether to return an error or just a warning
                 // For now, we'll still allow login but you might want to change this
         }</span>
 
-        <span class="cov0" title="0">return user, nil</span>
+        <span class="cov8" title="1">return user, nil</span>
 }
 
-func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) <span class="cov0" title="0">{
+func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) <span class="cov8" title="1">{
         user, err := s.userRepo.GetUserByID(ctx, userID)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return nil, err
         }</span>
 
         // Don't return the hashed password
-        <span class="cov0" title="0">user.HashedPassword = nil
+        <span class="cov8" title="1">user.HashedPassword = nil
 
         return user, nil</span>
 }

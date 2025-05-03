@@ -16,7 +16,6 @@ type TripRepository struct {
 }
 
 /*
-*
 IMPLEMENTED FOR TESTING PURPOSES
 */
 type TripRepositoryInterface interface {

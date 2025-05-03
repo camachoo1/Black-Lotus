@@ -16,6 +16,16 @@ type UserRepository struct {
 	db *pgxpool.Pool
 }
 
+/*
+IMPLEMENTED FOR TESTING PURPOSES
+*/
+type UserRepositoryInterface interface {
+	CreateUser(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error)
+	LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
+	GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+}
+
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
