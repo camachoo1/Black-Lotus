@@ -11,11 +11,15 @@ import (
 	"black-lotus/internal/trip/repositories"
 )
 
+/*
+*
+IMPLEMENTED FOR TESTING PURPOSES
+*/
 type TripService struct {
-	tripRepo *repositories.TripRepository
+	tripRepo repositories.TripRepositoryInterface
 }
 
-func NewTripService(tripRepo *repositories.TripRepository) *TripService {
+func NewTripService(tripRepo repositories.TripRepositoryInterface) *TripService {
 	return &TripService{tripRepo: tripRepo}
 }
 
