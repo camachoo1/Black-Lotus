@@ -67,7 +67,7 @@
 				
 				<option value="file5">black-lotus/internal/auth/services/user_service.go (92.9%)</option>
 				
-				<option value="file6">black-lotus/internal/auth/validators/auth_validators.go (0.0%)</option>
+				<option value="file6">black-lotus/internal/auth/validators/auth_validators.go (80.0%)</option>
 				
 				</select>
 			</div>
@@ -1121,7 +1121,7 @@ import (
 )
 
 // RegisterCustomValidators adds custom validation functions to the validator
-func RegisterCustomValidators(v *validator.Validate) <span class="cov0" title="0">{
+func RegisterCustomValidators(v *validator.Validate) <span class="cov8" title="1">{
         v.RegisterValidation("containsuppercase", ValidateContainsUppercase)
         v.RegisterValidation("containslowercase", ValidateContainsLowercase)
         v.RegisterValidation("containsnumber", ValidateContainsNumber)
@@ -1129,28 +1129,48 @@ func RegisterCustomValidators(v *validator.Validate) <span class="cov0" title="0
 }</span>
 
 // ValidateContainsUppercase checks if the field contains at least one uppercase letter
-func ValidateContainsUppercase(fl validator.FieldLevel) bool <span class="cov0" title="0">{
+func ValidateContainsUppercase(fl validator.FieldLevel) bool <span class="cov8" title="1">{
         value := fl.Field().String()
-        return regexp.MustCompile(`[A-Z]`).MatchString(value)
-}</span>
+
+        if value == "" </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return regexp.MustCompile(`[A-Z]`).MatchString(value)</span>
+}
 
 // ValidateContainsLowercase checks if the field contains at least one lowercase letter
-func ValidateContainsLowercase(fl validator.FieldLevel) bool <span class="cov0" title="0">{
+func ValidateContainsLowercase(fl validator.FieldLevel) bool <span class="cov8" title="1">{
         value := fl.Field().String()
-        return regexp.MustCompile(`[a-z]`).MatchString(value)
-}</span>
+
+        if value == "" </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return regexp.MustCompile(`[a-z]`).MatchString(value)</span>
+}
 
 // ValidateContainsNumber checks if the field contains at least one number
-func ValidateContainsNumber(fl validator.FieldLevel) bool <span class="cov0" title="0">{
+func ValidateContainsNumber(fl validator.FieldLevel) bool <span class="cov8" title="1">{
         value := fl.Field().String()
-        return regexp.MustCompile(`[0-9]`).MatchString(value)
-}</span>
+
+        if value == "" </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return regexp.MustCompile(`[0-9]`).MatchString(value)</span>
+}
 
 // ValidateContainsSpecialChar checks if the field contains at least one special character
-func ValidateContainsSpecialChar(fl validator.FieldLevel) bool <span class="cov0" title="0">{
+func ValidateContainsSpecialChar(fl validator.FieldLevel) bool <span class="cov8" title="1">{
         value := fl.Field().String()
-        return regexp.MustCompile(`[!@#$%^&amp;*()_+\-=\[\]{};':"\\|,.&lt;&gt;\/?]`).MatchString(value)
-}</span>
+
+        if value == "" </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return regexp.MustCompile(`[!@#$%^&amp;*()_+\-=\[\]{};':"\\|,.&lt;&gt;\/?]`).MatchString(value)</span>
+}
 </pre>
 		
 		</div>
