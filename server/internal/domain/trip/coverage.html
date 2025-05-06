@@ -108,23 +108,23 @@ func (r *TripRepository) CreateTrip(ctx context.Context, userID uuid.UUID, input
         trip := new(models.Trip)
 
         err := r.db.QueryRow(ctx, `
-        INSERT INTO trips (user_id, name, description, start_date, end_date, destination)
+        INSERT INTO trips (user_id, name, description, start_date, end_date, location)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        RETURNING id, user_id, name, description, start_date, end_date, location, created_at, updated_at
     `,
                 userID,
                 input.Name,
                 input.Description,
                 input.StartDate,
                 input.EndDate,
-                input.Destination).Scan(
+                input.Location).Scan(
                 &amp;trip.ID,
                 &amp;trip.UserID,
                 &amp;trip.Name,
                 &amp;trip.Description,
                 &amp;trip.StartDate,
                 &amp;trip.EndDate,
-                &amp;trip.Destination,
+                &amp;trip.Location,
                 &amp;trip.CreatedAt,
                 &amp;trip.UpdatedAt,
         )
@@ -147,16 +147,16 @@ func (r *TripRepository) UpdateTrip(ctx context.Context, tripID uuid.UUID, input
         description = COALESCE($2, description),
         start_date = COALESCE($3, start_date),
         end_date = COALESCE($4, end_date),
-        destination = COALESCE($5, destination),
+        location = COALESCE($5, location),
         updated_at = NOW()
         WHERE id = $6
-        RETURNING id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        RETURNING id, user_id, name, description, start_date, end_date, location, created_at, updated_at
         `,
                 input.Name,
                 input.Description,
                 input.StartDate,
                 input.EndDate,
-                input.Destination,
+                input.Location,
                 tripID).Scan(
                 &amp;trip.ID,
                 &amp;trip.UserID,
@@ -164,7 +164,7 @@ func (r *TripRepository) UpdateTrip(ctx context.Context, tripID uuid.UUID, input
                 &amp;trip.Description,
                 &amp;trip.StartDate,
                 &amp;trip.EndDate,
-                &amp;trip.Destination,
+                &amp;trip.Location,
                 &amp;trip.CreatedAt,
                 &amp;trip.UpdatedAt,
         )
@@ -202,7 +202,7 @@ func (r *TripRepository) GetTripByID(ctx context.Context, tripID uuid.UUID) (*mo
         trip := new(models.Trip)
 
         err := r.db.QueryRow(ctx, `
-                                SELECT id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+                                SELECT id, user_id, name, description, start_date, end_date, location, created_at, updated_at
                                 FROM trips
                                 WHERE id = $1
                 `, tripID).Scan(
@@ -212,7 +212,7 @@ func (r *TripRepository) GetTripByID(ctx context.Context, tripID uuid.UUID) (*mo
                 &amp;trip.Description,
                 &amp;trip.StartDate,
                 &amp;trip.EndDate,
-                &amp;trip.Destination,
+                &amp;trip.Location,
                 &amp;trip.CreatedAt,
                 &amp;trip.UpdatedAt,
         )
@@ -234,7 +234,7 @@ func (r *TripRepository) GetTripsByUserID(ctx context.Context, userID uuid.UUID,
         }</span>
 
         <span class="cov8" title="1">rows, err := r.db.Query(ctx, `
-        SELECT id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        SELECT id, user_id, name, description, start_date, end_date, location, created_at, updated_at
         FROM trips
         WHERE user_id = $1
         ORDER BY start_date DESC
@@ -258,7 +258,7 @@ func (r *TripRepository) GetTripsByUserID(ctx context.Context, userID uuid.UUID,
                         &amp;trip.Description,
                         &amp;trip.StartDate,
                         &amp;trip.EndDate,
-                        &amp;trip.Destination,
+                        &amp;trip.Location,
                         &amp;trip.CreatedAt,
                         &amp;trip.UpdatedAt,
                 )
@@ -345,7 +345,7 @@ func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input mo
 
         // If name is empty, we generate a default name for the Trip
         <span class="cov8" title="1">if input.Name == "" </span><span class="cov8" title="1">{
-                input.Name = fmt.Sprintf("Trip to %s", input.Destination)
+                input.Name = fmt.Sprintf("Trip to %s", input.Location)
         }</span>
 
         // Create the trip in the DB

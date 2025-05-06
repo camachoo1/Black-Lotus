@@ -360,14 +360,14 @@ func TestGetUserWithTrips(t *testing.T) {
 					UserID:      userID,
 					Name:        "Trip to Paris",
 					Description: "Vacation in Paris",
-					Destination: "Paris",
+					Location:    "Paris",
 				},
 				{
 					ID:          tripID2,
 					UserID:      userID,
 					Name:        "Trip to Rome",
 					Description: "Business trip to Rome",
-					Destination: "Rome",
+					Location:    "Rome",
 				},
 			}, nil
 		}

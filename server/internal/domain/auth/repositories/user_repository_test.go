@@ -394,7 +394,7 @@ func TestGetUserWithTrips(t *testing.T) {
 			Description: fmt.Sprintf("Description for trip %d", i+1),
 			StartDate:   time.Now().Add(time.Duration(i*24) * time.Hour),
 			EndDate:     time.Now().Add(time.Duration((i+7)*24) * time.Hour),
-			Destination: fmt.Sprintf("Destination %d", i+1),
+			Location:    fmt.Sprintf("Location %d", i+1),
 		}
 
 		_, err := tripRepo.CreateTrip(context.Background(), user.ID, tripInput)

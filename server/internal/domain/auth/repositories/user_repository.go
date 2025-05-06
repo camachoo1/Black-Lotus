@@ -168,7 +168,7 @@ func (r *UserRepository) GetUserWithTrips(ctx context.Context, userID uuid.UUID,
 
 	// Then get their trips
 	rows, err := r.db.Query(ctx, `
-        SELECT id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        SELECT id, user_id, name, description, start_date, end_date, location, created_at, updated_at
         FROM trips
         WHERE user_id = $1
         ORDER BY start_date DESC
@@ -190,7 +190,7 @@ func (r *UserRepository) GetUserWithTrips(ctx context.Context, userID uuid.UUID,
 			&trip.Description,
 			&trip.StartDate,
 			&trip.EndDate,
-			&trip.Destination,
+			&trip.Location,
 			&trip.CreatedAt,
 			&trip.UpdatedAt,
 		)

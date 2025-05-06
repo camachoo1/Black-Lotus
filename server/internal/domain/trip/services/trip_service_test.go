@@ -271,7 +271,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: "Test Description",
 			StartDate:   time.Now().Add(24 * time.Hour),
 			EndDate:     time.Now().Add(7 * 24 * time.Hour),
-			Destination: "Test City",
+			Location:    "Test City",
 		}
 
 		expectedTrip := &models.Trip{
@@ -281,7 +281,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: input.Description,
 			StartDate:   input.StartDate,
 			EndDate:     input.EndDate,
-			Destination: input.Destination,
+			Location:    input.Location,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -323,7 +323,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: "Test Description",
 			StartDate:   time.Now().Add(7 * 24 * time.Hour), // 7 days in future
 			EndDate:     time.Now().Add(24 * time.Hour),     // 1 day in future
-			Destination: "Test City",
+			Location:    "Test City",
 		}
 
 		// Mock repository that should not be called
@@ -362,7 +362,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: "Test Description",
 			StartDate:   time.Now().Add(24 * time.Hour),
 			EndDate:     time.Now().Add(7 * 24 * time.Hour),
-			Destination: "Paris",
+			Location:    "Paris",
 		}
 
 		expectedTrip := &models.Trip{
@@ -372,7 +372,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: input.Description,
 			StartDate:   input.StartDate,
 			EndDate:     input.EndDate,
-			Destination: input.Destination,
+			Location:    input.Location,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -411,7 +411,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: "Test Description",
 			StartDate:   time.Now().Add(24 * time.Hour),
 			EndDate:     time.Now().Add(7 * 24 * time.Hour),
-			Destination: "Test City",
+			Location:    "Test City",
 		}
 
 		// Mock repository
@@ -544,7 +544,7 @@ func TestUpdateTrip(t *testing.T) {
 					Description: "Original Description",
 					StartDate:   time.Now(),
 					EndDate:     time.Now().Add(24 * time.Hour),
-					Destination: "Original City",
+					Location:    "Original City",
 				}, nil
 			},
 		}
@@ -580,7 +580,7 @@ func TestUpdateTrip(t *testing.T) {
 					Description: "Original Description",
 					StartDate:   time.Now(),
 					EndDate:     time.Now().Add(24 * time.Hour),
-					Destination: "Original City",
+					Location:    "Original City",
 				}, nil
 			},
 		}
@@ -620,7 +620,7 @@ func TestUpdateTrip(t *testing.T) {
 					Description: "Original Description",
 					StartDate:   now,
 					EndDate:     now.Add(24 * time.Hour),
-					Destination: "Original City",
+					Location:    "Original City",
 				}, nil
 			},
 		}
@@ -659,7 +659,7 @@ func TestUpdateTrip(t *testing.T) {
 					Description: "Original Description",
 					StartDate:   now.Add(48 * time.Hour), // Future start
 					EndDate:     now.Add(72 * time.Hour),
-					Destination: "Original City",
+					Location:    "Original City",
 				}, nil
 			},
 		}
@@ -696,7 +696,7 @@ func TestUpdateTrip(t *testing.T) {
 			Description: "Original Description",
 			StartDate:   now,
 			EndDate:     now.Add(72 * time.Hour),
-			Destination: "Original City",
+			Location:    "Original City",
 		}
 
 		updatedTrip := &models.Trip{
@@ -706,7 +706,7 @@ func TestUpdateTrip(t *testing.T) {
 			Description: "Updated Description",
 			StartDate:   now.Add(24 * time.Hour),
 			EndDate:     now.Add(96 * time.Hour),
-			Destination: "Updated City",
+			Location:    "Updated City",
 		}
 
 		mockTripRepo := &MockTripRepository{
@@ -727,7 +727,7 @@ func TestUpdateTrip(t *testing.T) {
 			Description: stringPtr("Updated Description"),
 			StartDate:   timePtr(now.Add(24 * time.Hour)),
 			EndDate:     timePtr(now.Add(96 * time.Hour)),
-			Destination: stringPtr("Updated City"),
+			Location:    stringPtr("Updated City"),
 		}
 
 		// Call the service method

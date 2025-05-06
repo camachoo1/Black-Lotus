@@ -33,7 +33,7 @@ func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input mo
 
 	// If name is empty, we generate a default name for the Trip
 	if input.Name == "" {
-		input.Name = fmt.Sprintf("Trip to %s", input.Destination)
+		input.Name = fmt.Sprintf("Trip to %s", input.Location)
 	}
 
 	// Create the trip in the DB

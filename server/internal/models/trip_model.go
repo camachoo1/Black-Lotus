@@ -14,7 +14,7 @@ type Trip struct {
 	Description string    `json:"description"`
 	StartDate   time.Time `json:"start_date" validate:"required"`
 	EndDate     time.Time `json:"end_date" validate:"required"`
-	Destination string    `json:"destination" validate:"required"`
+	Location    string    `json:"location" validate:"required"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	User        *User     `json:"-,omitempty"`
@@ -26,7 +26,7 @@ type CreateTripInput struct {
 	Description string    `json:"description"`
 	StartDate   time.Time `json:"start_date" validate:"required"`
 	EndDate     time.Time `json:"end_date" validate:"required"`
-	Destination string    `json:"destination" validate:"required"`
+	Location    string    `json:"location" validate:"required"`
 }
 
 type UpdateTripInput struct {
@@ -34,5 +34,5 @@ type UpdateTripInput struct {
 	Description *string    `json:"description"`
 	StartDate   *time.Time `json:"start_date"`
 	EndDate     *time.Time `json:"end_date"`
-	Destination *string    `json:"destination"`
+	Location    *string    `json:"location"`
 }

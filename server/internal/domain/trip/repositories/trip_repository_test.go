@@ -63,7 +63,7 @@ func TestCreateTrip(t *testing.T) {
 			Description: "A test trip",
 			StartDate:   startDate,
 			EndDate:     endDate,
-			Destination: "Test City",
+			Location:    "Test City",
 		}
 
 		trip, err := repo.CreateTrip(context.Background(), userID, input)
@@ -99,8 +99,8 @@ func TestCreateTrip(t *testing.T) {
 			t.Errorf("End date should be %v, got %v", input.EndDate, trip.EndDate)
 		}
 
-		if trip.Destination != input.Destination {
-			t.Errorf("Destination should be %s, got %s", input.Destination, trip.Destination)
+		if trip.Location != input.Location {
+			t.Errorf("Location should be %s, got %s", input.Location, trip.Location)
 		}
 
 		if trip.CreatedAt.IsZero() {
@@ -126,7 +126,7 @@ func TestGetTripByID(t *testing.T) {
 		Description: "A test trip",
 		StartDate:   time.Now().Add(24 * time.Hour),
 		EndDate:     time.Now().Add(7 * 24 * time.Hour),
-		Destination: "Test City",
+		Location:    "Test City",
 	}
 
 	createdTrip, err := repo.CreateTrip(context.Background(), userID, input)
@@ -185,7 +185,7 @@ func TestUpdateTrip(t *testing.T) {
 		Description: "A test trip",
 		StartDate:   startDate,
 		EndDate:     endDate,
-		Destination: "Test City",
+		Location:    "Test City",
 	}
 
 	createdTrip, err := repo.CreateTrip(context.Background(), userID, input)
@@ -252,7 +252,7 @@ func TestDeleteTrip(t *testing.T) {
 		Description: "A test trip",
 		StartDate:   startDate,
 		EndDate:     endDate,
-		Destination: "Test City",
+		Location:    "Test City",
 	}
 
 	createdTrip, err := repo.CreateTrip(context.Background(), userID, input)
@@ -311,7 +311,7 @@ func TestGetTripsByUserID(t *testing.T) {
 			Description: "Test Description",
 			StartDate:   startDate,
 			EndDate:     endDate,
-			Destination: "Test City",
+			Location:    "Test City",
 		}
 
 		_, err := repo.CreateTrip(context.Background(), userID, input)
@@ -411,7 +411,7 @@ func TestGetTripWithUser(t *testing.T) {
 		Description: "A test trip",
 		StartDate:   time.Now().Add(24 * time.Hour),
 		EndDate:     time.Now().Add(7 * 24 * time.Hour),
-		Destination: "Test City",
+		Location:    "Test City",
 	}
 
 	createdTrip, err := repo.CreateTrip(context.Background(), userID, input)
