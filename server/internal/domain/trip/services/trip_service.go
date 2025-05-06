@@ -23,7 +23,6 @@ type TripServiceInterface interface {
 	GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error)
 	GetTripWithUser(ctx context.Context, tripID uuid.UUID, requestUserID uuid.UUID) (*models.Trip, error)
 	GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error)
-	GetTripsByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.Trip, error)
 }
 type TripService struct {
 	tripRepo tripRepository.TripRepositoryInterface

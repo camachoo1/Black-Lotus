@@ -5,14 +5,40 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var TestDB *pgxpool.Pool
 
-// InitializeTestDB sets up the test database connection
+const maxRetries = 3
+const retryDelay = 2 * time.Second
+
+// InitializeTestDB sets up the test database connection with retry logic
 func InitializeTestDB() error {
+	var err error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			log.Printf("Retrying database initialization (attempt %d/%d)...", attempt+1, maxRetries)
+			time.Sleep(retryDelay)
+		}
+
+		err = initializeTestDBWithCleanup()
+		if err == nil {
+			return nil
+		}
+
+		log.Printf("Database initialization attempt failed: %v", err)
+		// Make sure any partial connections are closed before retrying
+		CloseTestDB()
+	}
+
+	return fmt.Errorf("failed to initialize test database after %d attempts: %v", maxRetries, err)
+}
+
+// initializeTestDBWithCleanup handles the actual initialization process
+func initializeTestDBWithCleanup() error {
 	// Connect to default postgres database first to recreate test database
 	defaultConnString := fmt.Sprintf("postgres://%s:%s@%s:%s/postgres",
 		getTestEnv("TEST_DB_USER", "postgres"),
@@ -45,16 +71,22 @@ func InitializeTestDB() error {
 	// Drop the test database if it exists and recreate it
 	if exists {
 		log.Printf("Dropping existing test database: %s", testDBName)
-		// Close any existing connections to the database
+		// Close any existing connections to the database (improved version with timeout)
 		_, err = defaultDB.Exec(context.Background(),
-			fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s'", testDBName))
+			fmt.Sprintf("SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '%s' AND pid <> pg_backend_pid()", testDBName))
 		if err != nil {
 			log.Printf("Warning: Error terminating connections: %v", err)
+			// Continue anyway, as the database might still be droppable
 		}
 
-		// Drop the database
-		_, err = defaultDB.Exec(context.Background(),
-			fmt.Sprintf("DROP DATABASE %s", testDBName))
+		// Add a small delay to allow connections to close fully
+		time.Sleep(500 * time.Millisecond)
+
+		// Drop the database with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, err = defaultDB.Exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
 		if err != nil {
 			return fmt.Errorf("error dropping test database: %v", err)
 		}
@@ -103,6 +135,7 @@ func InitializeTestDB() error {
 func CloseTestDB() {
 	if TestDB != nil {
 		TestDB.Close()
+		TestDB = nil
 	}
 }
 

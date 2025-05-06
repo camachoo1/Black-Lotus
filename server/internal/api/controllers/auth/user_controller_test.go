@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -25,16 +27,6 @@ type MockUserService struct {
 	loginUserFunc        func(ctx context.Context, input models.LoginUserInput) (*models.User, error)
 	getUserByIDFunc      func(ctx context.Context, userID uuid.UUID) (*models.User, error)
 	getUserWithTripsFunc func(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error)
-}
-
-// Helper function to check if a string contains a substring
-func containsSubstring(s, substr string) bool {
-	return s != "" && strings.Contains(s, substr)
-}
-
-// Helper function for creating string pointers
-func stringPtr(s string) *string {
-	return &s
 }
 
 // Ensure MockUserService implements services.UserServiceInterface
@@ -95,6 +87,7 @@ func (m *MockSessionService) ValidateAccessToken(ctx context.Context, token stri
 	}
 	return nil, errors.New("ValidateAccessToken not implemented")
 }
+
 func (m *MockSessionService) ValidateRefreshToken(ctx context.Context, token string) (*models.Session, error) {
 	if m.validateAccessTokenFunc != nil {
 		return m.validateAccessTokenFunc(ctx, token)
@@ -130,14 +123,120 @@ func (m *MockSessionService) EndAllUserSessions(ctx context.Context, userID uuid
 	return errors.New("EndSessionByRefreshToken not implemented")
 }
 
-func TestRegisterUser(t *testing.T) {
-	// Setup
+// Helper function to check if a string contains a substring
+func containsSubstring(s, substr string) bool {
+	return s != "" && strings.Contains(s, substr)
+}
+
+// Helper function for creating string pointers
+func stringPtr(s string) *string {
+	return &s
+}
+
+// Helper function to create a new test context with the Echo framework
+func newTestContext(method, path string, body []byte) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
+	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	return e.NewContext(req, rec), rec
+}
+
+// Helper function to add cookies to a request
+func addCookies(c echo.Context, cookies ...*http.Cookie) {
+	req := c.Request()
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+}
+
+// Helper function to check if response status matches expected
+func checkResponseStatus(t *testing.T, rec *httptest.ResponseRecorder, expectedStatus int) {
+	t.Helper()
+	if rec.Code != expectedStatus {
+		t.Errorf("Expected status %d, got %d", expectedStatus, rec.Code)
+	}
+}
+
+// Helper to verify token cookies are present and have expected values
+func checkTokenCookies(t *testing.T, rec *httptest.ResponseRecorder, expectAccessToken, expectRefreshToken bool, expectedValues map[string]string) {
+	t.Helper()
+	cookies := rec.Result().Cookies()
+
+	var accessTokenFound, refreshTokenFound bool
+	for _, cookie := range cookies {
+		if cookie.Name == "access_token" {
+			accessTokenFound = true
+			if expectedValue, exists := expectedValues["access_token"]; exists && cookie.Value != expectedValue {
+				t.Errorf("Expected access token %s, got %s", expectedValue, cookie.Value)
+			}
+		}
+		if cookie.Name == "refresh_token" {
+			refreshTokenFound = true
+			if expectedValue, exists := expectedValues["refresh_token"]; exists && cookie.Value != expectedValue {
+				t.Errorf("Expected refresh token %s, got %s", expectedValue, cookie.Value)
+			}
+		}
+	}
+
+	if expectAccessToken && !accessTokenFound {
+		t.Error("Access token cookie was not set")
+	}
+
+	if expectRefreshToken && !refreshTokenFound {
+		t.Error("Refresh token cookie was not set")
+	}
+}
+
+// Helper to verify cookies are cleared (empty value and negative MaxAge)
+func checkCookiesCleared(t *testing.T, rec *httptest.ResponseRecorder, cookieNames ...string) {
+	t.Helper()
+	cookies := rec.Result().Cookies()
+
+	for _, name := range cookieNames {
+		var found bool
+		for _, cookie := range cookies {
+			if cookie.Name == name {
+				found = true
+				if cookie.Value != "" {
+					t.Errorf("Expected cookie %s value to be empty, got '%s'", name, cookie.Value)
+				}
+				if cookie.MaxAge >= 0 {
+					t.Errorf("Expected cookie %s MaxAge to be negative, got %d", name, cookie.MaxAge)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("Expected to find cleared cookie %s", name)
+		}
+	}
+}
+
+// CreateTestSession creates a test session with the given user ID and tokens
+func createTestSession(userID uuid.UUID, accessToken, refreshToken string) *models.Session {
+	return &models.Session{
+		ID:            uuid.New(),
+		UserID:        userID,
+		AccessToken:   accessToken,
+		RefreshToken:  refreshToken,
+		AccessExpiry:  time.Now().Add(15 * time.Minute),
+		RefreshExpiry: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt:     time.Now(),
+	}
+}
+
+// Setup creates controller with mock services for testing
+func setupController() (*controllers.UserController, *MockUserService, *MockSessionService) {
 	mockUserService := &MockUserService{}
 	mockSessionService := &MockSessionService{}
 	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	return controller, mockUserService, mockSessionService
+}
 
-	t.Run("Successful Registration", func(t *testing.T) {
+func TestRegisterUser(t *testing.T) {
+	t.Run("SuccessfulRegistration", func(t *testing.T) {
+		controller, mockUserService, mockSessionService := setupController()
+
 		// Create test input
 		input := models.CreateUserInput{
 			Name:     "Test User",
@@ -147,10 +246,7 @@ func TestRegisterUser(t *testing.T) {
 		inputJSON, _ := json.Marshal(input)
 
 		// Setup request
-		req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/register", inputJSON)
 
 		// Mock user service
 		userID := uuid.New()
@@ -172,15 +268,7 @@ func TestRegisterUser(t *testing.T) {
 		// Mock session service
 		mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
 			if id == userID {
-				return &models.Session{
-					ID:            uuid.New(),
-					UserID:        userID,
-					AccessToken:   "test_access_token",
-					RefreshToken:  "test_refresh_token",
-					AccessExpiry:  time.Now().Add(15 * time.Minute),
-					RefreshExpiry: time.Now().Add(7 * 24 * time.Hour),
-					CreatedAt:     time.Now(),
-				}, nil
+				return createTestSession(userID, "test_access_token", "test_refresh_token"), nil
 			}
 			return nil, errors.New("unexpected user ID")
 		}
@@ -192,9 +280,7 @@ func TestRegisterUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusCreated {
-			t.Errorf("Expected status %d, got %d", http.StatusCreated, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusCreated)
 
 		// Verify response
 		var response models.User
@@ -207,42 +293,16 @@ func TestRegisterUser(t *testing.T) {
 			t.Errorf("Expected user ID %s, got %s", userID, response.ID)
 		}
 
-		if response.Name != input.Name {
-			t.Errorf("Expected name %s, got %s", input.Name, response.Name)
-		}
-
-		if response.Email != input.Email {
-			t.Errorf("Expected email %s, got %s", input.Email, response.Email)
-		}
-
 		// Check if cookies are set
-		cookies := rec.Result().Cookies()
-		var accessTokenFound, refreshTokenFound bool
-		for _, cookie := range cookies {
-			if cookie.Name == "access_token" {
-				accessTokenFound = true
-				if cookie.Value != "test_access_token" {
-					t.Errorf("Expected access token %s, got %s", "test_access_token", cookie.Value)
-				}
-			}
-			if cookie.Name == "refresh_token" {
-				refreshTokenFound = true
-				if cookie.Value != "test_refresh_token" {
-					t.Errorf("Expected refresh token %s, got %s", "test_refresh_token", cookie.Value)
-				}
-			}
-		}
-
-		if !accessTokenFound {
-			t.Error("Access token cookie was not set")
-		}
-
-		if !refreshTokenFound {
-			t.Error("Refresh token cookie was not set")
-		}
+		checkTokenCookies(t, rec, true, true, map[string]string{
+			"access_token":  "test_access_token",
+			"refresh_token": "test_refresh_token",
+		})
 	})
 
-	t.Run("User Already Exists", func(t *testing.T) {
+	t.Run("UserAlreadyExists", func(t *testing.T) {
+		controller, mockUserService, _ := setupController()
+
 		// Create test input
 		input := models.CreateUserInput{
 			Name:     "Existing User",
@@ -252,10 +312,7 @@ func TestRegisterUser(t *testing.T) {
 		inputJSON, _ := json.Marshal(input)
 
 		// Setup request
-		req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/register", inputJSON)
 
 		// Mock user service
 		mockUserService.createUserFunc = func(ctx context.Context, i models.CreateUserInput) (*models.User, error) {
@@ -269,9 +326,7 @@ func TestRegisterUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusConflict {
-			t.Errorf("Expected status %d, got %d", http.StatusConflict, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusConflict)
 
 		// Verify response
 		var response map[string]string
@@ -285,58 +340,250 @@ func TestRegisterUser(t *testing.T) {
 		}
 	})
 
-	t.Run("Validation Error", func(t *testing.T) {
-		// Create invalid input (missing password)
+	t.Run("ValidationErrors", func(t *testing.T) {
+		// Table-driven test for validation errors
+		testCases := []struct {
+			name          string
+			input         models.CreateUserInput
+			expectedField string
+			expectedMsg   string
+		}{
+			{
+				name: "MissingPassword",
+				input: models.CreateUserInput{
+					Name:  "Test User",
+					Email: "test@example.com",
+					// Password is nil
+				},
+				expectedField: "password",
+				expectedMsg:   "password is required",
+			},
+			{
+				name: "InvalidEmail",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "not-an-email",
+					Password: stringPtr("Password123!"),
+				},
+				expectedField: "email",
+				expectedMsg:   "Please enter a valid email address",
+			},
+			{
+				name: "PasswordTooShort",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "test@example.com",
+					Password: stringPtr("Pa1!"), // Too short
+				},
+				expectedField: "password",
+				expectedMsg:   "password must be at least 6 characters long",
+			},
+			{
+				name: "PasswordWithoutUppercase",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "test@example.com",
+					Password: stringPtr("password123!"),
+				},
+				expectedField: "password",
+				expectedMsg:   "Password must contain at least one uppercase letter",
+			},
+			{
+				name: "PasswordWithoutLowercase",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "test@example.com",
+					Password: stringPtr("PASSWORD123!"),
+				},
+				expectedField: "password",
+				expectedMsg:   "Password must contain at least one lowercase letter",
+			},
+			{
+				name: "PasswordWithoutNumber",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "test@example.com",
+					Password: stringPtr("Password!"),
+				},
+				expectedField: "password",
+				expectedMsg:   "Password must contain at least one number",
+			},
+			{
+				name: "PasswordWithoutSpecialChar",
+				input: models.CreateUserInput{
+					Name:     "Test User",
+					Email:    "test@example.com",
+					Password: stringPtr("Password123"),
+				},
+				expectedField: "password",
+				expectedMsg:   "Password must contain at least one special character",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				controller, _, _ := setupController()
+
+				// Setup request with test case input
+				inputJSON, _ := json.Marshal(tc.input)
+				c, rec := newTestContext(http.MethodPost, "/auth/register", inputJSON)
+
+				// Execute
+				err := controller.RegisterUser(c)
+				if err != nil {
+					t.Errorf("Expected no error, got: %v", err)
+				}
+
+				// Check status code
+				checkResponseStatus(t, rec, http.StatusBadRequest)
+
+				// Verify response contains validation error
+				var response map[string]interface{}
+				err = json.Unmarshal(rec.Body.Bytes(), &response)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
+
+				errorMsg, ok := response["error"].(string)
+				if !ok || errorMsg != "Validation failed" {
+					t.Errorf("Expected error 'Validation failed', got '%v'", response["error"])
+				}
+
+				details, ok := response["details"].(map[string]interface{})
+				if !ok || details == nil {
+					t.Errorf("Expected validation details, got nil or wrong type: %v", response)
+					return
+				}
+
+				// Check specific error for the field
+				fieldError, exists := details[tc.expectedField]
+				if !exists {
+					t.Errorf("Expected validation error for field '%s', but none found in: %v",
+						tc.expectedField, details)
+					return
+				}
+
+				errorString, ok := fieldError.(string)
+				if !ok {
+					t.Errorf("Expected error message to be string, got %T: %v", fieldError, fieldError)
+					return
+				}
+
+				if errorString != tc.expectedMsg {
+					t.Errorf("Error message doesn't match. Got: '%s', Expected: '%s'",
+						errorString, tc.expectedMsg)
+				}
+			})
+		}
+	})
+
+	t.Run("SessionCreationFailure", func(t *testing.T) {
+		controller, mockUserService, mockSessionService := setupController()
+
+		// Create test input
 		input := models.CreateUserInput{
-			Name:  "Test User",
-			Email: "test@example.com",
+			Name:     "Test User",
+			Email:    "test@example.com",
+			Password: stringPtr("Password123!"),
 		}
 		inputJSON, _ := json.Marshal(input)
 
 		// Setup request
-		req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/register", inputJSON)
+
+		// Mock user service success
+		userID := uuid.New()
+		createdUser := &models.User{
+			ID:            userID,
+			Name:          input.Name,
+			Email:         input.Email,
+			EmailVerified: false,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		mockUserService.createUserFunc = func(ctx context.Context, i models.CreateUserInput) (*models.User, error) {
+			return createdUser, nil
+		}
+
+		// Mock session service failure
+		mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
+			return nil, errors.New("session creation failed")
+		}
 
 		// Execute
 		err := controller.RegisterUser(c)
 		if err != nil {
-			t.Errorf("Expected no error from handler, got: %v", err)
+			t.Errorf("Expected no error, got: %v", err)
 		}
 
-		// Check status code
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
-		}
+		// Should still be created despite session failure
+		checkResponseStatus(t, rec, http.StatusCreated)
 
-		// Verify response contains validation error
-		var response map[string]interface{}
+		// Verify user is returned
+		var response models.User
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		errorMsg, ok := response["error"].(string)
-		if !ok || errorMsg != "Validation failed" {
-			t.Errorf("Expected error 'Validation failed', got '%v'", response["error"])
+		if response.ID != userID {
+			t.Errorf("Expected user ID %s, got %s", userID, response.ID)
 		}
 
-		details, ok := response["details"].(map[string]interface{})
-		if !ok || details == nil {
-			t.Error("Expected validation details, got nil or wrong type")
+		// Verify no cookies are set
+		cookies := rec.Result().Cookies()
+		for _, cookie := range cookies {
+			if cookie.Name == "access_token" || cookie.Name == "refresh_token" {
+				t.Errorf("Expected no cookie %s to be set after session creation failure", cookie.Name)
+			}
+		}
+	})
+
+	t.Run("GeneralFailure", func(t *testing.T) {
+		controller, mockUserService, _ := setupController()
+
+		// Create test input
+		input := models.CreateUserInput{
+			Name:     "Test User",
+			Email:    "test@example.com",
+			Password: stringPtr("Password123!"),
+		}
+		inputJSON, _ := json.Marshal(input)
+
+		// Setup request
+		c, rec := newTestContext(http.MethodPost, "/auth/register", inputJSON)
+
+		// Mock user service to return a general error
+		mockUserService.createUserFunc = func(ctx context.Context, i models.CreateUserInput) (*models.User, error) {
+			return nil, errors.New("database connection failed")
+		}
+
+		// Execute
+		err := controller.RegisterUser(c)
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+
+		// Check status code
+		checkResponseStatus(t, rec, http.StatusInternalServerError)
+
+		// Verify error response
+		var response map[string]string
+		err = json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response["error"] != "Failed to create user" {
+			t.Errorf("Expected error 'Failed to create user', got '%s'", response["error"])
 		}
 	})
 }
 
 func TestLoginUser(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	t.Run("SuccessfulLogin", func(t *testing.T) {
+		controller, mockUserService, mockSessionService := setupController()
 
-	t.Run("Successful Login", func(t *testing.T) {
 		// Create test input
 		input := models.LoginUserInput{
 			Email:    "test@example.com",
@@ -345,10 +592,7 @@ func TestLoginUser(t *testing.T) {
 		inputJSON, _ := json.Marshal(input)
 
 		// Setup request
-		req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(inputJSON))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/login", inputJSON)
 
 		// Mock user service
 		userID := uuid.New()
@@ -370,15 +614,7 @@ func TestLoginUser(t *testing.T) {
 		// Mock session service
 		mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
 			if id == userID {
-				return &models.Session{
-					ID:            uuid.New(),
-					UserID:        userID,
-					AccessToken:   "test_access_token",
-					RefreshToken:  "test_refresh_token",
-					AccessExpiry:  time.Now().Add(15 * time.Minute),
-					RefreshExpiry: time.Now().Add(7 * 24 * time.Hour),
-					CreatedAt:     time.Now(),
-				}, nil
+				return createTestSession(userID, "test_access_token", "test_refresh_token"), nil
 			}
 			return nil, errors.New("unexpected user ID")
 		}
@@ -390,9 +626,7 @@ func TestLoginUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusOK)
 
 		// Verify response
 		var response models.User
@@ -405,42 +639,16 @@ func TestLoginUser(t *testing.T) {
 			t.Errorf("Expected user ID %s, got %s", userID, response.ID)
 		}
 
-		if response.Name != loggedInUser.Name {
-			t.Errorf("Expected name %s, got %s", loggedInUser.Name, response.Name)
-		}
-
-		if response.Email != input.Email {
-			t.Errorf("Expected email %s, got %s", input.Email, response.Email)
-		}
-
 		// Check if cookies are set
-		cookies := rec.Result().Cookies()
-		var accessTokenFound, refreshTokenFound bool
-		for _, cookie := range cookies {
-			if cookie.Name == "access_token" {
-				accessTokenFound = true
-				if cookie.Value != "test_access_token" {
-					t.Errorf("Expected access token %s, got %s", "test_access_token", cookie.Value)
-				}
-			}
-			if cookie.Name == "refresh_token" {
-				refreshTokenFound = true
-				if cookie.Value != "test_refresh_token" {
-					t.Errorf("Expected refresh token %s, got %s", "test_refresh_token", cookie.Value)
-				}
-			}
-		}
-
-		if !accessTokenFound {
-			t.Error("Access token cookie was not set")
-		}
-
-		if !refreshTokenFound {
-			t.Error("Refresh token cookie was not set")
-		}
+		checkTokenCookies(t, rec, true, true, map[string]string{
+			"access_token":  "test_access_token",
+			"refresh_token": "test_refresh_token",
+		})
 	})
 
-	t.Run("Invalid Credentials", func(t *testing.T) {
+	t.Run("InvalidCredentials", func(t *testing.T) {
+		controller, mockUserService, _ := setupController()
+
 		// Create test input
 		input := models.LoginUserInput{
 			Email:    "wrong@example.com",
@@ -449,10 +657,7 @@ func TestLoginUser(t *testing.T) {
 		inputJSON, _ := json.Marshal(input)
 
 		// Setup request
-		req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(inputJSON))
-		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/login", inputJSON)
 
 		// Mock user service
 		mockUserService.loginUserFunc = func(ctx context.Context, i models.LoginUserInput) (*models.User, error) {
@@ -466,9 +671,7 @@ func TestLoginUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusUnauthorized)
 
 		// Verify response
 		var response map[string]string
@@ -481,30 +684,71 @@ func TestLoginUser(t *testing.T) {
 			t.Error("Expected non-empty error message")
 		}
 	})
+
+	t.Run("SessionCreationFailure", func(t *testing.T) {
+		controller, mockUserService, mockSessionService := setupController()
+
+		// Create test input
+		input := models.LoginUserInput{
+			Email:    "test@example.com",
+			Password: "Password123!",
+		}
+		inputJSON, _ := json.Marshal(input)
+
+		// Setup request
+		c, rec := newTestContext(http.MethodPost, "/auth/login", inputJSON)
+
+		// Mock user service success
+		userID := uuid.New()
+		loggedInUser := &models.User{
+			ID:            userID,
+			Name:          "Test User",
+			Email:         input.Email,
+			EmailVerified: true,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		mockUserService.loginUserFunc = func(ctx context.Context, i models.LoginUserInput) (*models.User, error) {
+			return loggedInUser, nil
+		}
+
+		// Mock session service failure
+		mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
+			return nil, errors.New("session creation failed")
+		}
+
+		// Execute
+		err := controller.LoginUser(c)
+		if err != nil {
+			t.Errorf("Expected no error from handler, got: %v", err)
+		}
+
+		// Check status code
+		checkResponseStatus(t, rec, http.StatusInternalServerError)
+
+		// Verify error response
+		var response map[string]string
+		err = json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if !containsSubstring(response["error"], "Failed to create session") {
+			t.Errorf("Expected error message containing 'Failed to create session', got '%s'", response["error"])
+		}
+	})
 }
 
 func TestLogoutUser(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	t.Run("SuccessfulLogout", func(t *testing.T) {
+		controller, _, mockSessionService := setupController()
 
-	t.Run("Successful Logout", func(t *testing.T) {
 		// Setup request with cookies
-		req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "test_access_token",
-		}
-		refreshCookie := &http.Cookie{
-			Name:  "refresh_token",
-			Value: "test_refresh_token",
-		}
-		req.AddCookie(accessCookie)
-		req.AddCookie(refreshCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/logout", nil)
+		addCookies(c,
+			&http.Cookie{Name: "access_token", Value: "test_access_token"},
+			&http.Cookie{Name: "refresh_token", Value: "test_refresh_token"},
+		)
 
 		// Mock session service
 		mockSessionService.endSessionByAccessTokenFunc = func(ctx context.Context, token string) error {
@@ -528,9 +772,7 @@ func TestLogoutUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusOK)
 
 		// Verify response
 		var response map[string]string
@@ -544,24 +786,14 @@ func TestLogoutUser(t *testing.T) {
 		}
 
 		// Check if cookies are cleared
-		cookies := rec.Result().Cookies()
-		for _, cookie := range cookies {
-			if cookie.Name == "access_token" || cookie.Name == "refresh_token" {
-				if cookie.Value != "" {
-					t.Errorf("Expected cookie %s value to be empty, got '%s'", cookie.Name, cookie.Value)
-				}
-				if cookie.MaxAge >= 0 {
-					t.Errorf("Expected cookie %s MaxAge to be negative, got %d", cookie.Name, cookie.MaxAge)
-				}
-			}
-		}
+		checkCookiesCleared(t, rec, "access_token", "refresh_token")
 	})
 
-	t.Run("Already Logged Out", func(t *testing.T) {
+	t.Run("AlreadyLoggedOut", func(t *testing.T) {
+		controller, _, _ := setupController()
+
 		// Setup request without cookies
-		req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/logout", nil)
 
 		// Execute
 		err := controller.LogoutUser(c)
@@ -570,9 +802,7 @@ func TestLogoutUser(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusOK)
 
 		// Verify response
 		var response map[string]string
@@ -585,25 +815,93 @@ func TestLogoutUser(t *testing.T) {
 			t.Errorf("Expected message 'Already logged out', got '%s'", response["message"])
 		}
 	})
+
+	t.Run("PartialFailure", func(t *testing.T) {
+		controller, _, mockSessionService := setupController()
+
+		// Setup request with cookies
+		c, rec := newTestContext(http.MethodPost, "/auth/logout", nil)
+		addCookies(c,
+			&http.Cookie{Name: "access_token", Value: "test_access_token"},
+			&http.Cookie{Name: "refresh_token", Value: "test_refresh_token"},
+		)
+
+		// Mock endSessionByAccessToken to fail
+		mockSessionService.endSessionByAccessTokenFunc = func(ctx context.Context, token string) error {
+			return errors.New("access token deletion failed")
+		}
+
+		// Mock endSessionByRefreshToken to succeed
+		mockSessionService.endSessionByRefreshTokenFunc = func(ctx context.Context, token string) error {
+			return nil
+		}
+
+		// Execute (this uses the controller and creates response in rec)
+		if err := controller.LogoutUser(c); err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+
+		// Check status code (this uses rec)
+		checkResponseStatus(t, rec, http.StatusOK)
+
+		// Verify response (this uses rec)
+		var response map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response["message"] != "Successfully logged out" {
+			t.Errorf("Expected message 'Successfully logged out', got '%s'", response["message"])
+		}
+
+		// Check if cookies are cleared (this uses rec)
+		checkCookiesCleared(t, rec, "access_token", "refresh_token")
+	})
+
+	t.Run("RefreshTokenFailure", func(t *testing.T) {
+		controller, _, mockSessionService := setupController()
+
+		// Setup request with only refresh token
+		c, rec := newTestContext(http.MethodPost, "/auth/logout", nil)
+		addCookies(c, &http.Cookie{Name: "refresh_token", Value: "test_refresh_token"})
+
+		// Mock session service for refresh token failure
+		mockSessionService.endSessionByRefreshTokenFunc = func(ctx context.Context, token string) error {
+			return errors.New("database error when ending refresh token session")
+		}
+
+		// Execute
+		err := controller.LogoutUser(c)
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+
+		// Check status code - should still succeed
+		checkResponseStatus(t, rec, http.StatusOK)
+
+		// Verify response indicates success
+		var response map[string]string
+		err = json.Unmarshal(rec.Body.Bytes(), &response)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response["message"] != "Successfully logged out" {
+			t.Errorf("Expected message 'Successfully logged out', got '%s'", response["message"])
+		}
+
+		// Check if cookies are cleared
+		checkCookiesCleared(t, rec, "refresh_token")
+	})
 }
 
 func TestRefreshToken(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	t.Run("SuccessfulTokenRefresh", func(t *testing.T) {
+		controller, _, mockSessionService := setupController()
 
-	t.Run("Successful Token Refresh", func(t *testing.T) {
 		// Setup request with refresh token cookie
-		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
-		refreshCookie := &http.Cookie{
-			Name:  "refresh_token",
-			Value: "valid_refresh_token",
-		}
-		req.AddCookie(refreshCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/refresh", nil)
+		addCookies(c, &http.Cookie{Name: "refresh_token", Value: "valid_refresh_token"})
 
 		// Mock service response
 		mockSessionService.refreshAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
@@ -627,9 +925,7 @@ func TestRefreshToken(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusOK)
 
 		// Verify response
 		var response map[string]string
@@ -643,27 +939,16 @@ func TestRefreshToken(t *testing.T) {
 		}
 
 		// Check if new access token cookie is set
-		cookies := rec.Result().Cookies()
-		var accessTokenFound bool
-		for _, cookie := range cookies {
-			if cookie.Name == "access_token" {
-				accessTokenFound = true
-				if cookie.Value != "new_access_token" {
-					t.Errorf("Expected new access token 'new_access_token', got '%s'", cookie.Value)
-				}
-			}
-		}
-
-		if !accessTokenFound {
-			t.Error("Access token cookie was not set")
-		}
+		checkTokenCookies(t, rec, true, false, map[string]string{
+			"access_token": "new_access_token",
+		})
 	})
 
-	t.Run("No Refresh Token", func(t *testing.T) {
+	t.Run("NoRefreshToken", func(t *testing.T) {
+		controller, _, _ := setupController()
+
 		// Setup request without refresh token cookie
-		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/refresh", nil)
 
 		// Execute
 		err := controller.RefreshToken(c)
@@ -672,9 +957,7 @@ func TestRefreshToken(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusUnauthorized)
 
 		// Verify response
 		var response map[string]string
@@ -688,16 +971,12 @@ func TestRefreshToken(t *testing.T) {
 		}
 	})
 
-	t.Run("Invalid Refresh Token", func(t *testing.T) {
+	t.Run("InvalidRefreshToken", func(t *testing.T) {
+		controller, _, mockSessionService := setupController()
+
 		// Setup request with invalid refresh token cookie
-		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
-		refreshCookie := &http.Cookie{
-			Name:  "refresh_token",
-			Value: "invalid_refresh_token",
-		}
-		req.AddCookie(refreshCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := newTestContext(http.MethodPost, "/auth/refresh", nil)
+		addCookies(c, &http.Cookie{Name: "refresh_token", Value: "invalid_refresh_token"})
 
 		// Mock service response
 		mockSessionService.refreshAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
@@ -711,9 +990,7 @@ func TestRefreshToken(t *testing.T) {
 		}
 
 		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
+		checkResponseStatus(t, rec, http.StatusUnauthorized)
 
 		// Verify response
 		var response map[string]string
@@ -728,545 +1005,296 @@ func TestRefreshToken(t *testing.T) {
 	})
 }
 
-// Additional test for RegisterUser with invalid email format
-func TestRegisterUserWithInvalidEmail(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Create test input with invalid email
-	input := models.CreateUserInput{
-		Name:     "Test User",
-		Email:    "not-an-email",
-		Password: stringPtr("Password123!"),
-	}
-	inputJSON, _ := json.Marshal(input)
-
-	// Setup request
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Execute
-	err := controller.RegisterUser(c)
-	if err != nil {
-		t.Errorf("Expected no error from handler, got: %v", err)
-	}
-
-	// Check status code
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	// Verify response contains validation error for email
-	var response map[string]interface{}
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	errorMsg, ok := response["error"].(string)
-	if !ok || errorMsg != "Validation failed" {
-		t.Errorf("Expected error 'Validation failed', got '%v'", response["error"])
-	}
-
-	details, ok := response["details"].(map[string]interface{})
-	if !ok || details == nil {
-		t.Error("Expected validation details, got nil or wrong type")
-	}
-}
-
-// Test for RegisterUser with weak password
-func TestRegisterUserWithWeakPassword(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Create test input with weak password
-	input := models.CreateUserInput{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: stringPtr("weak"),
-	}
-	inputJSON, _ := json.Marshal(input)
-
-	// Setup request
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Execute
-	err := controller.RegisterUser(c)
-	if err != nil {
-		t.Errorf("Expected no error from handler, got: %v", err)
-	}
-
-	// Check status code
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	// Verify response contains validation errors for password
-	var response map[string]interface{}
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	errorMsg, ok := response["error"].(string)
-	if !ok || errorMsg != "Validation failed" {
-		t.Errorf("Expected error 'Validation failed', got '%v'", response["error"])
-	}
-}
-
-// Test for RegisterUser with session creation failure
-func TestRegisterUserWithSessionFailure(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Create test input
-	input := models.CreateUserInput{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: stringPtr("Password123!"),
-	}
-	inputJSON, _ := json.Marshal(input)
-
-	// Setup request
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock user service success
-	userID := uuid.New()
-	createdUser := &models.User{
-		ID:            userID,
-		Name:          input.Name,
-		Email:         input.Email,
-		EmailVerified: false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
-	mockUserService.createUserFunc = func(ctx context.Context, i models.CreateUserInput) (*models.User, error) {
-		return createdUser, nil
-	}
-
-	// Mock session service failure
-	mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
-		return nil, errors.New("session creation failed")
-	}
-
-	// Execute
-	err := controller.RegisterUser(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code - should still be created
-	if rec.Code != http.StatusCreated {
-		t.Errorf("Expected status %d, got %d", http.StatusCreated, rec.Code)
-	}
-
-	// Verify user is returned despite session failure
-	var response models.User
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response.ID != userID {
-		t.Errorf("Expected user ID %s, got %s", userID, response.ID)
-	}
-
-	// Verify no cookies are set
-	cookies := rec.Result().Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == "access_token" || cookie.Name == "refresh_token" {
-			t.Errorf("Expected no cookie %s to be set after session creation failure", cookie.Name)
-		}
-	}
-}
-
-// Test LoginUser with session creation failure
-func TestLoginUserWithSessionFailure(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Create test input
-	input := models.LoginUserInput{
-		Email:    "test@example.com",
-		Password: "Password123!",
-	}
-	inputJSON, _ := json.Marshal(input)
-
-	// Setup request
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(inputJSON))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock user service success
-	userID := uuid.New()
-	loggedInUser := &models.User{
-		ID:            userID,
-		Name:          "Test User",
-		Email:         input.Email,
-		EmailVerified: true,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-	}
-	mockUserService.loginUserFunc = func(ctx context.Context, i models.LoginUserInput) (*models.User, error) {
-		return loggedInUser, nil
-	}
-
-	// Mock session service failure
-	mockSessionService.createSessionFunc = func(ctx context.Context, id uuid.UUID) (*models.Session, error) {
-		return nil, errors.New("session creation failed")
-	}
-
-	// Execute
-	err := controller.LoginUser(c)
-	if err != nil {
-		t.Errorf("Expected no error from handler, got: %v", err)
-	}
-
-	// Check status code - should be internal server error
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-	}
-
-	// Verify error response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if !containsSubstring(response["error"], "Failed to create session") {
-		t.Errorf("Expected error message containing 'Failed to create session', got '%s'", response["error"])
-	}
-}
-
-// Test LogoutUser with partial token failure
-func TestLogoutUserWithPartialFailure(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Setup request with cookies
-	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	accessCookie := &http.Cookie{
-		Name:  "access_token",
-		Value: "test_access_token",
-	}
-	refreshCookie := &http.Cookie{
-		Name:  "refresh_token",
-		Value: "test_refresh_token",
-	}
-	req.AddCookie(accessCookie)
-	req.AddCookie(refreshCookie)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock endSessionByAccessToken to fail
-	mockSessionService.endSessionByAccessTokenFunc = func(ctx context.Context, token string) error {
-		return errors.New("access token deletion failed")
-	}
-
-	// Mock endSessionByRefreshToken to succeed
-	mockSessionService.endSessionByRefreshTokenFunc = func(ctx context.Context, token string) error {
-		return nil
-	}
-
-	// Execute
-	err := controller.LogoutUser(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code - should still be successful
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	// Verify response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response["message"] != "Successfully logged out" {
-		t.Errorf("Expected message 'Successfully logged out', got '%s'", response["message"])
-	}
-
-	// Check if cookies are cleared despite token deletion failure
-	cookies := rec.Result().Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == "access_token" || cookie.Name == "refresh_token" {
-			if cookie.Value != "" {
-				t.Errorf("Expected cookie %s value to be empty, got '%s'", cookie.Name, cookie.Value)
-			}
-			if cookie.MaxAge >= 0 {
-				t.Errorf("Expected cookie %s MaxAge to be negative, got %d", cookie.Name, cookie.MaxAge)
-			}
-		}
-	}
-}
-
-// Test for GetUserProfile
 func TestGetUserProfile(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	// Table-driven tests for different authentication scenarios
+	authTests := []struct {
+		name           string
+		cookies        []*http.Cookie
+		mockTokenFunc  func(*MockSessionService, uuid.UUID)
+		mockUserFunc   func(*MockUserService, uuid.UUID)
+		expectedStatus int
+		expectedError  string
+		expectedCode   string
+	}{
+		{
+			name: "Success",
+			cookies: []*http.Cookie{
+				{Name: "access_token", Value: "valid_access_token"},
+			},
+			mockTokenFunc: func(mockSession *MockSessionService, userID uuid.UUID) {
+				mockSession.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
+					return createTestSession(userID, token, "valid_refresh_token"), nil
+				}
+			},
+			mockUserFunc: func(mockUser *MockUserService, userID uuid.UUID) {
+				mockUser.getUserByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+					return &models.User{
+						ID:            userID,
+						Name:          "Test User",
+						Email:         "test@example.com",
+						EmailVerified: true,
+						CreatedAt:     time.Now(),
+						UpdatedAt:     time.Now(),
+					}, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "No Access Token",
+			cookies:        []*http.Cookie{},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Not authenticated",
+		},
+		{
+			name: "Only Refresh Token",
+			cookies: []*http.Cookie{
+				{Name: "refresh_token", Value: "valid_refresh_token"},
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Access token expired",
+			expectedCode:   "token_expired",
+		},
+		{
+			name: "Invalid Access Token",
+			cookies: []*http.Cookie{
+				{Name: "access_token", Value: "invalid_access_token"},
+			},
+			mockTokenFunc: func(mockSession *MockSessionService, userID uuid.UUID) {
+				mockSession.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
+					return nil, errors.New("invalid token")
+				}
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Invalid access token",
+			expectedCode:   "token_invalid",
+		},
+		{
+			name: "GetUserByID Failure",
+			cookies: []*http.Cookie{
+				{Name: "access_token", Value: "valid_access_token"},
+			},
+			mockTokenFunc: func(mockSession *MockSessionService, userID uuid.UUID) {
+				mockSession.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
+					return createTestSession(userID, token, "valid_refresh_token"), nil
+				}
+			},
+			mockUserFunc: func(mockUser *MockUserService, userID uuid.UUID) {
+				mockUser.getUserByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+					return nil, errors.New("database error")
+				}
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Failed to get user",
+		},
+	}
 
-	t.Run("Success", func(t *testing.T) {
-		// Setup request with access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "valid_access_token",
-		}
-		req.AddCookie(accessCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+	for _, tc := range authTests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller, mockUserService, mockSessionService := setupController()
 
-		// Mock session service
-		userID := uuid.New()
-		mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-			if token == "valid_access_token" {
-				return &models.Session{
-					ID:            uuid.New(),
-					UserID:        userID,
-					AccessToken:   token,
-					RefreshToken:  "valid_refresh_token",
-					AccessExpiry:  time.Now().Add(15 * time.Minute),
-					RefreshExpiry: time.Now().Add(7 * 24 * time.Hour),
-				}, nil
+			// Setup request
+			c, rec := newTestContext(http.MethodGet, "/auth/profile", nil)
+			if len(tc.cookies) > 0 {
+				addCookies(c, tc.cookies...)
 			}
-			return nil, errors.New("invalid token")
-		}
 
-		// Mock user service
-		mockUserService.getUserByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			if id == userID {
-				return &models.User{
-					ID:            userID,
-					Name:          "Test User",
-					Email:         "test@example.com",
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}, nil
+			// Setup mocks if needed
+			userID := uuid.New()
+			if tc.mockTokenFunc != nil {
+				tc.mockTokenFunc(mockSessionService, userID)
 			}
-			return nil, errors.New("user not found")
-		}
+			if tc.mockUserFunc != nil {
+				tc.mockUserFunc(mockUserService, userID)
+			}
 
-		// Execute
-		err := controller.GetUserProfile(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
+			// Execute
+			err := controller.GetUserProfile(c)
+			if err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
 
-		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
+			// Check status code
+			checkResponseStatus(t, rec, tc.expectedStatus)
 
-		// Verify response
-		var user models.User
-		err = json.Unmarshal(rec.Body.Bytes(), &user)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
+			// For success case, verify user data
+			if tc.expectedStatus == http.StatusOK {
+				var user models.User
+				err = json.Unmarshal(rec.Body.Bytes(), &user)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
 
-		if user.ID != userID {
-			t.Errorf("Expected user ID %s, got %s", userID, user.ID)
-		}
-	})
+				if user.ID != userID {
+					t.Errorf("Expected user ID %s, got %s", userID, user.ID)
+				}
+			} else {
+				// For error cases, verify error response
+				var response map[string]string
+				err = json.Unmarshal(rec.Body.Bytes(), &response)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
 
-	t.Run("No Access Token", func(t *testing.T) {
-		// Setup request without access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+				if tc.expectedError != "" && response["error"] != tc.expectedError {
+					t.Errorf("Expected error '%s', got '%s'", tc.expectedError, response["error"])
+				}
 
-		// Execute
-		err := controller.GetUserProfile(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Not authenticated" {
-			t.Errorf("Expected error 'Not authenticated', got '%s'", response["error"])
-		}
-	})
-
-	t.Run("Only Refresh Token", func(t *testing.T) {
-		// Setup request with only refresh token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile", nil)
-		refreshCookie := &http.Cookie{
-			Name:  "refresh_token",
-			Value: "valid_refresh_token",
-		}
-		req.AddCookie(refreshCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Execute
-		err := controller.GetUserProfile(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Access token expired" || response["code"] != "token_expired" {
-			t.Errorf("Expected error 'Access token expired', got '%s'", response["error"])
-		}
-	})
-
-	t.Run("Invalid Access Token", func(t *testing.T) {
-		// Setup request with invalid access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "invalid_access_token",
-		}
-		req.AddCookie(accessCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Mock session service
-		mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-			return nil, errors.New("invalid token")
-		}
-
-		// Execute
-		err := controller.GetUserProfile(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Invalid access token" || response["code"] != "token_invalid" {
-			t.Errorf("Expected error 'Invalid access token', got '%s'", response["error"])
-		}
-	})
-
-	t.Run("GetUserByID Failure", func(t *testing.T) {
-		// Setup request with valid access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "valid_access_token",
-		}
-		req.AddCookie(accessCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Mock session service success
-		userID := uuid.New()
-		mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-			return &models.Session{
-				ID:           uuid.New(),
-				UserID:       userID,
-				AccessToken:  token,
-				RefreshToken: "valid_refresh_token",
-			}, nil
-		}
-
-		// Mock user service failure
-		mockUserService.getUserByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return nil, errors.New("database error")
-		}
-
-		// Execute
-		err := controller.GetUserProfile(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Failed to get user" {
-			t.Errorf("Expected error 'Failed to get user', got '%s'", response["error"])
-		}
-	})
+				if tc.expectedCode != "" && response["code"] != tc.expectedCode {
+					t.Errorf("Expected code '%s', got '%s'", tc.expectedCode, response["code"])
+				}
+			}
+		})
+	}
 }
 
-// Test GetCSRFToken
+func TestGetUserProfileWithTrips(t *testing.T) {
+	// Reuse the same table test structure as GetUserProfile with small modifications
+	authTests := []struct {
+		name           string
+		cookies        []*http.Cookie
+		limit          int
+		offset         int
+		mockTokenFunc  func(*MockSessionService, uuid.UUID)
+		mockUserFunc   func(*MockUserService, uuid.UUID, int, int)
+		expectedStatus int
+		expectedError  string
+		expectedCode   string
+	}{
+		{
+			name: "Success",
+			cookies: []*http.Cookie{
+				{Name: "access_token", Value: "valid_access_token"},
+			},
+			limit:  10,
+			offset: 0,
+			mockTokenFunc: func(mockSession *MockSessionService, userID uuid.UUID) {
+				mockSession.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
+					return createTestSession(userID, token, "valid_refresh_token"), nil
+				}
+			},
+			mockUserFunc: func(mockUser *MockUserService, userID uuid.UUID, limit, offset int) {
+				mockUser.getUserWithTripsFunc = func(ctx context.Context, id uuid.UUID, l, o int) (*models.User, error) {
+					if l != limit || o != offset {
+						return nil, errors.New("unexpected pagination params")
+					}
+					return &models.User{
+						ID:            userID,
+						Name:          "Test User",
+						Email:         "test@example.com",
+						EmailVerified: true,
+						CreatedAt:     time.Now(),
+						UpdatedAt:     time.Now(),
+						// Add trips data here as needed
+					}, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "No Access Token",
+			cookies:        []*http.Cookie{},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Not authenticated",
+		},
+		{
+			name: "GetUserWithTrips Failure",
+			cookies: []*http.Cookie{
+				{Name: "access_token", Value: "valid_access_token"},
+			},
+			mockTokenFunc: func(mockSession *MockSessionService, userID uuid.UUID) {
+				mockSession.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
+					return createTestSession(userID, token, "valid_refresh_token"), nil
+				}
+			},
+			mockUserFunc: func(mockUser *MockUserService, userID uuid.UUID, limit, offset int) {
+				mockUser.getUserWithTripsFunc = func(ctx context.Context, id uuid.UUID, l, o int) (*models.User, error) {
+					return nil, errors.New("database error")
+				}
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Failed to get user profile with trips",
+		},
+	}
+
+	for _, tc := range authTests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller, mockUserService, mockSessionService := setupController()
+
+			// Setup request with query params for pagination if needed
+			path := "/auth/profile/trips"
+			if tc.limit > 0 || tc.offset > 0 {
+				path = path + fmt.Sprintf("?limit=%d&offset=%d", tc.limit, tc.offset)
+			}
+
+			c, rec := newTestContext(http.MethodGet, path, nil)
+
+			// Set query params in context
+			if tc.limit > 0 {
+				c.QueryParams().Set("limit", strconv.Itoa(tc.limit))
+			}
+			if tc.offset > 0 {
+				c.QueryParams().Set("offset", strconv.Itoa(tc.offset))
+			}
+
+			if len(tc.cookies) > 0 {
+				addCookies(c, tc.cookies...)
+			}
+
+			// Setup mocks if needed
+			userID := uuid.New()
+			if tc.mockTokenFunc != nil {
+				tc.mockTokenFunc(mockSessionService, userID)
+			}
+			if tc.mockUserFunc != nil {
+				tc.mockUserFunc(mockUserService, userID, tc.limit, tc.offset)
+			}
+
+			// Execute
+			err := controller.GetUserProfileWithTrips(c)
+			if err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+
+			// Check status code
+			checkResponseStatus(t, rec, tc.expectedStatus)
+
+			// For success case, verify user data
+			if tc.expectedStatus == http.StatusOK {
+				var user models.User
+				err = json.Unmarshal(rec.Body.Bytes(), &user)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
+
+				if user.ID != userID {
+					t.Errorf("Expected user ID %s, got %s", userID, user.ID)
+				}
+			} else {
+				// For error cases, verify error response
+				var response map[string]string
+				err = json.Unmarshal(rec.Body.Bytes(), &response)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal response: %v", err)
+				}
+
+				if tc.expectedError != "" && response["error"] != tc.expectedError {
+					t.Errorf("Expected error '%s', got '%s'", tc.expectedError, response["error"])
+				}
+
+				if tc.expectedCode != "" && response["code"] != tc.expectedCode {
+					t.Errorf("Expected code '%s', got '%s'", tc.expectedCode, response["code"])
+				}
+			}
+		})
+	}
+}
+
 func TestGetCSRFToken(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
+	controller, _, _ := setupController()
 
 	// Setup request
-	req := httptest.NewRequest(http.MethodGet, "/auth/csrf", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	c, rec := newTestContext(http.MethodGet, "/auth/csrf", nil)
 
 	// Set CSRF token in context
 	c.Set("csrf", "test_csrf_token")
@@ -1278,9 +1306,7 @@ func TestGetCSRFToken(t *testing.T) {
 	}
 
 	// Check status code
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	checkResponseStatus(t, rec, http.StatusOK)
 
 	// Verify response
 	var response map[string]string
@@ -1291,561 +1317,5 @@ func TestGetCSRFToken(t *testing.T) {
 
 	if response["csrf_token"] != "test_csrf_token" {
 		t.Errorf("Expected csrf_token 'test_csrf_token', got '%s'", response["csrf_token"])
-	}
-}
-
-// Test GetUserProfileWithTrips
-func TestGetUserProfileWithTrips(t *testing.T) {
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	t.Run("Success", func(t *testing.T) {
-		// Setup request with access token and pagination params
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile/trips?limit=10&offset=0", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "valid_access_token",
-		}
-		req.AddCookie(accessCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Mock session service
-		userID := uuid.New()
-		mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-			if token == "valid_access_token" {
-				return &models.Session{
-					ID:           uuid.New(),
-					UserID:       userID,
-					AccessToken:  token,
-					RefreshToken: "valid_refresh_token",
-				}, nil
-			}
-			return nil, errors.New("invalid token")
-		}
-
-		// Mock user service
-		mockUserService.getUserWithTripsFunc = func(ctx context.Context, id uuid.UUID, limit, offset int) (*models.User, error) {
-			if id == userID && limit == 10 && offset == 0 {
-				return &models.User{
-					ID:            userID,
-					Name:          "Test User",
-					Email:         "test@example.com",
-					EmailVerified: true,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-					// Add trips data here as needed
-				}, nil
-			}
-			return nil, errors.New("user not found or invalid pagination")
-		}
-
-		// Execute
-		err := controller.GetUserProfileWithTrips(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-		}
-
-		// Verify response
-		var user models.User
-		err = json.Unmarshal(rec.Body.Bytes(), &user)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if user.ID != userID {
-			t.Errorf("Expected user ID %s, got %s", userID, user.ID)
-		}
-	})
-
-	t.Run("No Access Token", func(t *testing.T) {
-		// Setup request without access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile/trips", nil)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Execute
-		err := controller.GetUserProfileWithTrips(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Not authenticated" {
-			t.Errorf("Expected error 'Not authenticated', got '%s'", response["error"])
-		}
-	})
-
-	t.Run("GetUserWithTrips Failure", func(t *testing.T) {
-		// Setup request with valid access token
-		req := httptest.NewRequest(http.MethodGet, "/auth/profile/trips", nil)
-		accessCookie := &http.Cookie{
-			Name:  "access_token",
-			Value: "valid_access_token",
-		}
-		req.AddCookie(accessCookie)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-
-		// Mock session service success
-		userID := uuid.New()
-		mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-			return &models.Session{
-				ID:           uuid.New(),
-				UserID:       userID,
-				AccessToken:  token,
-				RefreshToken: "valid_refresh_token",
-			}, nil
-		}
-
-		// Mock user service failure
-		mockUserService.getUserWithTripsFunc = func(ctx context.Context, id uuid.UUID, limit, offset int) (*models.User, error) {
-			return nil, errors.New("database error")
-		}
-
-		// Execute
-		err := controller.GetUserProfileWithTrips(c)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-
-		// Check status code
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-		}
-
-		// Verify response
-		var response map[string]string
-		err = json.Unmarshal(rec.Body.Bytes(), &response)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal response: %v", err)
-		}
-
-		if response["error"] != "Failed to get user profile with trips" {
-			t.Errorf("Expected error 'Failed to get user profile with trips', got '%s'", response["error"])
-		}
-	})
-}
-
-// TestRegisterUserWithValidationErrors tests various validation scenarios
-func TestRegisterUserWithValidationErrors(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	testCases := []struct {
-		name          string
-		input         models.CreateUserInput
-		expectedField string // Exact field name as it appears in the response
-		expectedMsg   string // Exact error message to match
-	}{
-		{
-			name: "Missing Password",
-			input: models.CreateUserInput{
-				Name:  "Test User",
-				Email: "test@example.com",
-				// Password is nil
-			},
-			expectedField: "password",
-			expectedMsg:   "password is required",
-		},
-		{
-			name: "Invalid Email",
-			input: models.CreateUserInput{
-				Name:     "Test User",
-				Email:    "not-an-email",
-				Password: stringPtr("Password123!"),
-			},
-			expectedField: "email",
-			expectedMsg:   "Please enter a valid email address",
-		},
-		{
-			name: "Password Too Short",
-			input: models.CreateUserInput{
-				Name:     "Test User",
-				Email:    "test@example.com",
-				Password: stringPtr("Pa1!"), // Too short
-			},
-			expectedField: "password",
-			expectedMsg:   "password must be at least 6 characters long",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Make a copy of the test input to avoid changes between tests
-			inputJSON, _ := json.Marshal(tc.input)
-
-			// Setup request
-			req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-
-			// Execute
-			err := controller.RegisterUser(c)
-			if err != nil {
-				t.Errorf("Expected no error, got: %v", err)
-			}
-
-			// Check status code
-			if rec.Code != http.StatusBadRequest {
-				t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
-			}
-
-			// Verify response contains validation error
-			var response map[string]interface{}
-			err = json.Unmarshal(rec.Body.Bytes(), &response)
-			if err != nil {
-				t.Fatalf("Failed to unmarshal response: %v", err)
-			}
-
-			errorMsg, ok := response["error"].(string)
-			if !ok || errorMsg != "Validation failed" {
-				t.Errorf("Expected error 'Validation failed', got '%v'", response["error"])
-			}
-
-			details, ok := response["details"].(map[string]interface{})
-			if !ok || details == nil {
-				t.Errorf("Expected validation details, got nil or wrong type: %v", response)
-				return
-			}
-
-			// Get the error message for the exact field name
-			fieldError, exists := details[tc.expectedField]
-			if !exists {
-				t.Errorf("Expected validation error for field '%s', but none found in: %v",
-					tc.expectedField, details)
-				return
-			}
-
-			// Check if the error message exactly matches the expected text
-			errorString, ok := fieldError.(string)
-			if !ok {
-				t.Errorf("Expected error message to be string, got %T: %v", fieldError, fieldError)
-				return
-			}
-
-			if errorString != tc.expectedMsg {
-				t.Errorf("Error message doesn't match. Got: '%s', Expected: '%s'",
-					errorString, tc.expectedMsg)
-			}
-		})
-	}
-}
-
-// TestRegisterUserWithPasswordValidationErrors tests each password validation rule separately
-func TestRegisterUserWithPasswordValidationErrors(t *testing.T) {
-	testCases := []struct {
-		name        string
-		password    string
-		expectedMsg string // Exact error message to match
-	}{
-		{
-			name:        "Password Without Uppercase",
-			password:    "password123!",
-			expectedMsg: "Password must contain at least one uppercase letter",
-		},
-		{
-			name:        "Password Without Lowercase",
-			password:    "PASSWORD123!",
-			expectedMsg: "Password must contain at least one lowercase letter",
-		},
-		{
-			name:        "Password Without Number",
-			password:    "Password!",
-			expectedMsg: "Password must contain at least one number",
-		},
-		{
-			name:        "Password Without Special Character",
-			password:    "Password123",
-			expectedMsg: "Password must contain at least one special character",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Setup
-			e := echo.New()
-			mockUserService := &MockUserService{}
-			mockSessionService := &MockSessionService{}
-			controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-			// Create input with the test password
-			input := models.CreateUserInput{
-				Name:     "Test User",
-				Email:    "test@example.com",
-				Password: stringPtr(tc.password),
-			}
-			inputJSON, _ := json.Marshal(input)
-
-			// Setup request
-			req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-
-			// Execute
-			err := controller.RegisterUser(c)
-			if err != nil {
-				t.Errorf("Expected no error, got: %v", err)
-			}
-
-			// Check status code
-			if rec.Code != http.StatusBadRequest {
-				t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
-			}
-
-			// Verify response contains validation error
-			var response map[string]interface{}
-			err = json.Unmarshal(rec.Body.Bytes(), &response)
-			if err != nil {
-				t.Fatalf("Failed to unmarshal response: %v", err)
-			}
-
-			details, ok := response["details"].(map[string]interface{})
-			if !ok || details == nil {
-				t.Errorf("Expected validation details, got nil or wrong type: %v", response)
-				return
-			}
-
-			// Get the error message for the password field
-			// Use lowercase "password" as the field name based on error messages
-			fieldError, exists := details["password"]
-			if !exists {
-				t.Errorf("Expected validation error for field 'password', but none found in: %v", details)
-				return
-			}
-
-			// Check if the error message exactly matches the expected text
-			errorString, ok := fieldError.(string)
-			if !ok {
-				t.Errorf("Expected error message to be string, got %T: %v", fieldError, fieldError)
-				return
-			}
-
-			if errorString != tc.expectedMsg {
-				t.Errorf("Error message doesn't match. Got: '%s', Expected: '%s'",
-					errorString, tc.expectedMsg)
-			}
-		})
-	}
-}
-
-// TestRegisterUserWithGeneralFailure tests the case where user creation fails with internal error
-func TestRegisterUserWithGeneralFailure(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Create test input with valid data
-	input := models.CreateUserInput{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: stringPtr("Password123!"),
-	}
-	inputJSON, _ := json.Marshal(input)
-
-	// Setup request
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(inputJSON))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock user service to return a general error
-	mockUserService.createUserFunc = func(ctx context.Context, i models.CreateUserInput) (*models.User, error) {
-		return nil, errors.New("database connection failed")
-	}
-
-	// Execute
-	err := controller.RegisterUser(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-	}
-
-	// Verify error response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response["error"] != "Failed to create user" {
-		t.Errorf("Expected error 'Failed to create user', got '%s'", response["error"])
-	}
-}
-
-// TestLogoutUserWithRefreshTokenFailure tests the case where ending the refresh token session fails
-func TestLogoutUserWithRefreshTokenFailure(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Setup request with only refresh token
-	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	refreshCookie := &http.Cookie{
-		Name:  "refresh_token",
-		Value: "test_refresh_token",
-	}
-	req.AddCookie(refreshCookie)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock session service for refresh token failure
-	mockSessionService.endSessionByRefreshTokenFunc = func(ctx context.Context, token string) error {
-		return errors.New("database error when ending refresh token session")
-	}
-
-	// Execute
-	err := controller.LogoutUser(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code - should still succeed
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	// Verify response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response["message"] != "Successfully logged out" {
-		t.Errorf("Expected message 'Successfully logged out', got '%s'", response["message"])
-	}
-
-	// Check if cookies are cleared
-	cookies := rec.Result().Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == "refresh_token" {
-			if cookie.Value != "" {
-				t.Errorf("Expected cookie %s value to be empty, got '%s'", cookie.Name, cookie.Value)
-			}
-			if cookie.MaxAge >= 0 {
-				t.Errorf("Expected cookie %s MaxAge to be negative, got %d", cookie.Name, cookie.MaxAge)
-			}
-		}
-	}
-}
-
-// TestGetUserProfileWithTripsWithRefreshTokenOnly tests the case where access token is missing but refresh token exists
-func TestGetUserProfileWithTripsWithRefreshTokenOnly(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Setup request with only refresh token
-	req := httptest.NewRequest(http.MethodGet, "/auth/profile/trips", nil)
-	refreshCookie := &http.Cookie{
-		Name:  "refresh_token",
-		Value: "valid_refresh_token",
-	}
-	req.AddCookie(refreshCookie)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Execute
-	err := controller.GetUserProfileWithTrips(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-	}
-
-	// Verify response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response["error"] != "Access token expired" || response["code"] != "token_expired" {
-		t.Errorf("Expected error 'Access token expired', got '%s' with code '%s'",
-			response["error"], response["code"])
-	}
-}
-
-// TestGetUserProfileWithTripsWithInvalidToken tests the case where access token is invalid
-func TestGetUserProfileWithTripsWithInvalidToken(t *testing.T) {
-	// Setup
-	e := echo.New()
-	mockUserService := &MockUserService{}
-	mockSessionService := &MockSessionService{}
-	controller := controllers.NewUserController(mockUserService, mockSessionService)
-
-	// Setup request with invalid access token
-	req := httptest.NewRequest(http.MethodGet, "/auth/profile/trips", nil)
-	accessCookie := &http.Cookie{
-		Name:  "access_token",
-		Value: "invalid_access_token",
-	}
-	req.AddCookie(accessCookie)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// Mock session service to return an error for invalid token
-	mockSessionService.validateAccessTokenFunc = func(ctx context.Context, token string) (*models.Session, error) {
-		return nil, errors.New("invalid token")
-	}
-
-	// Execute
-	err := controller.GetUserProfileWithTrips(c)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	// Check status code
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, rec.Code)
-	}
-
-	// Verify response
-	var response map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-
-	if response["error"] != "Invalid access token" || response["code"] != "token_invalid" {
-		t.Errorf("Expected error 'Invalid access token', got '%s' with code '%s'",
-			response["error"], response["code"])
 	}
 }

@@ -16,7 +16,7 @@ black-lotus/internal/api/controllers/auth/oauth_controller.go:96.2,97.23 2 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:97.23,99.3 1 0
 black-lotus/internal/api/controllers/auth/oauth_controller.go:101.2,127.52 20 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:131.68,134.20 2 1
-black-lotus/internal/api/controllers/auth/oauth_controller.go:134.20,136.3 1 0
+black-lotus/internal/api/controllers/auth/oauth_controller.go:134.20,136.3 1 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:139.2,150.4 5 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:154.72,157.16 2 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:157.16,161.3 1 1
@@ -24,9 +24,9 @@ black-lotus/internal/api/controllers/auth/oauth_controller.go:164.2,166.17 3 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:166.17,168.17 2 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:168.17,171.4 1 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:175.2,181.16 5 1
-black-lotus/internal/api/controllers/auth/oauth_controller.go:181.16,185.3 1 0
+black-lotus/internal/api/controllers/auth/oauth_controller.go:181.16,185.3 1 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:188.2,189.16 2 1
-black-lotus/internal/api/controllers/auth/oauth_controller.go:189.16,193.3 1 0
+black-lotus/internal/api/controllers/auth/oauth_controller.go:189.16,193.3 1 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:196.2,197.23 2 1
 black-lotus/internal/api/controllers/auth/oauth_controller.go:197.23,199.3 1 0
 black-lotus/internal/api/controllers/auth/oauth_controller.go:201.2,227.64 20 1
@@ -95,9 +95,9 @@ black-lotus/internal/api/controllers/auth/user_controller.go:345.63,351.2 2 1
 black-lotus/internal/api/controllers/auth/user_controller.go:354.74,357.16 2 1
 black-lotus/internal/api/controllers/auth/user_controller.go:357.16,360.24 2 1
 black-lotus/internal/api/controllers/auth/user_controller.go:360.24,364.4 1 1
-black-lotus/internal/api/controllers/auth/user_controller.go:367.3,370.5 1 1
+black-lotus/internal/api/controllers/auth/user_controller.go:367.3,370.5 1 0
 black-lotus/internal/api/controllers/auth/user_controller.go:374.2,375.16 2 1
-black-lotus/internal/api/controllers/auth/user_controller.go:375.16,380.3 1 1
+black-lotus/internal/api/controllers/auth/user_controller.go:375.16,380.3 1 0
 black-lotus/internal/api/controllers/auth/user_controller.go:383.2,387.16 4 1
 black-lotus/internal/api/controllers/auth/user_controller.go:387.16,391.3 1 1
 black-lotus/internal/api/controllers/auth/user_controller.go:393.2,393.38 1 1
