@@ -12,13 +12,14 @@ import (
 	"black-lotus/internal/models"
 )
 
-// Mock TripRepository for testing
+// Updated MockTripRepository to include new relationship method
 type MockTripRepository struct {
 	CreateTripFn       func(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error)
 	GetTripByIDFn      func(ctx context.Context, tripID uuid.UUID) (*models.Trip, error)
 	UpdateTripFn       func(ctx context.Context, tripID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error)
 	DeleteTripFn       func(ctx context.Context, tripID uuid.UUID) error
 	GetTripsByUserIDFn func(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*models.Trip, error)
+	GetTripWithUserFn  func(ctx context.Context, tripID uuid.UUID) (*models.Trip, error)
 }
 
 func (m *MockTripRepository) CreateTrip(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error) {
@@ -41,13 +42,221 @@ func (m *MockTripRepository) GetTripsByUserID(ctx context.Context, userID uuid.U
 	return m.GetTripsByUserIDFn(ctx, userID, limit, offset)
 }
 
-// Helper functions for creating pointers - running into nil pointer dereferencing issues
+// New method implementation
+func (m *MockTripRepository) GetTripWithUser(ctx context.Context, tripID uuid.UUID) (*models.Trip, error) {
+	if m.GetTripWithUserFn != nil {
+		return m.GetTripWithUserFn(ctx, tripID)
+	}
+	return nil, errors.New("GetTripWithUser not implemented")
+}
+
+type MockUserRepository struct {
+	GetUserByIDFn func(ctx context.Context, userID uuid.UUID) (*models.User, error)
+}
+
+func (m *MockUserRepository) GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error) {
+	if m.GetUserByIDFn != nil {
+		return m.GetUserByIDFn(ctx, userID)
+	}
+	return nil, errors.New("GetUserByID not implemented")
+}
+
+// Implement required interface methods
+func (m *MockUserRepository) CreateUser(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error) {
+	return nil, errors.New("CreateUser not implemented")
+}
+
+func (m *MockUserRepository) LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error) {
+	return nil, errors.New("LoginUser not implemented")
+}
+
+func (m *MockUserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+	return nil, errors.New("GetUserByEmail not implemented")
+}
+
+func (m *MockUserRepository) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error) {
+	return nil, errors.New("GetUserWithTrips not implemented")
+}
+
+// Helper functions for creating pointers
 func stringPtr(s string) *string {
 	return &s
 }
 
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+// Add test for the new GetTripWithUser method
+func TestGetTripWithUser(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	tripID := uuid.New()
+	anotherUserID := uuid.New()
+
+	t.Run("Trip Not Found", func(t *testing.T) {
+		mockTripRepo := &MockTripRepository{
+			GetTripWithUserFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
+				return nil, errors.New("trip not found")
+			},
+		}
+		mockUserRepo := &MockUserRepository{}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		trip, err := service.GetTripWithUser(ctx, tripID, userID)
+
+		// Verify results
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+		if trip != nil {
+			t.Errorf("Expected nil trip, got: %v", trip)
+		}
+	})
+
+	t.Run("Unauthorized Access", func(t *testing.T) {
+		mockTripRepo := &MockTripRepository{
+			GetTripWithUserFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
+				return &models.Trip{
+					ID:     tripID,
+					UserID: anotherUserID, // Different user
+					User: &models.User{
+						ID:   anotherUserID,
+						Name: "Another User",
+					},
+				}, nil
+			},
+		}
+		mockUserRepo := &MockUserRepository{}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		trip, err := service.GetTripWithUser(ctx, tripID, userID)
+
+		// Verify results
+		if err == nil {
+			t.Error("Expected unauthorized error, got nil")
+		}
+		if trip != nil {
+			t.Errorf("Expected nil trip, got: %v", trip)
+		}
+	})
+
+	t.Run("Successful Retrieval", func(t *testing.T) {
+		mockTripRepo := &MockTripRepository{
+			GetTripWithUserFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
+				return &models.Trip{
+					ID:     tripID,
+					UserID: userID,
+					Name:   "Test Trip",
+					User: &models.User{
+						ID:   userID,
+						Name: "Test User",
+					},
+				}, nil
+			},
+		}
+		mockUserRepo := &MockUserRepository{}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		trip, err := service.GetTripWithUser(ctx, tripID, userID)
+
+		// Verify results
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if trip == nil {
+			t.Fatal("Expected trip, got nil")
+		}
+		if trip.User == nil {
+			t.Fatal("Expected user data to be included, got nil")
+		}
+		if trip.User.ID != userID {
+			t.Errorf("Expected user ID %s, got %s", userID, trip.User.ID)
+		}
+	})
+}
+
+// Test for GetUserWithTrips
+func TestGetUserWithTrips(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+
+	t.Run("User Not Found", func(t *testing.T) {
+		mockTripRepo := &MockTripRepository{}
+		mockUserRepo := &MockUserRepository{
+			GetUserByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+				return nil, errors.New("user not found")
+			},
+		}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		user, err := service.GetUserWithTrips(ctx, userID, 10, 0)
+
+		// Verify results
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+		if user != nil {
+			t.Errorf("Expected nil user, got: %v", user)
+		}
+	})
+
+	t.Run("Successful Retrieval", func(t *testing.T) {
+		mockTripRepo := &MockTripRepository{
+			GetTripsByUserIDFn: func(ctx context.Context, id uuid.UUID, limit, offset int) ([]*models.Trip, error) {
+				return []*models.Trip{
+					{
+						ID:     uuid.New(),
+						UserID: userID,
+						Name:   "Trip 1",
+					},
+					{
+						ID:     uuid.New(),
+						UserID: userID,
+						Name:   "Trip 2",
+					},
+				}, nil
+			},
+		}
+
+		mockUserRepo := &MockUserRepository{
+			GetUserByIDFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+				return &models.User{
+					ID:   userID,
+					Name: "Test User",
+				}, nil
+			},
+		}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		user, err := service.GetUserWithTrips(ctx, userID, 10, 0)
+
+		// Verify results
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if user == nil {
+			t.Fatal("Expected user, got nil")
+		}
+		if len(user.Trips) != 2 {
+			t.Errorf("Expected 2 trips, got %d", len(user.Trips))
+		}
+	})
 }
 
 func TestCreateTrip(t *testing.T) {
@@ -77,8 +286,8 @@ func TestCreateTrip(t *testing.T) {
 			UpdatedAt:   time.Now(),
 		}
 
-		// Mock repository
-		mockRepo := &MockTripRepository{
+		// Mock repositories
+		mockTripRepo := &MockTripRepository{
 			CreateTripFn: func(ctx context.Context, uid uuid.UUID, inp models.CreateTripInput) (*models.Trip, error) {
 				if uid != userID {
 					t.Errorf("Expected userID %s, got %s", userID, uid)
@@ -89,9 +298,10 @@ func TestCreateTrip(t *testing.T) {
 				return expectedTrip, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		// Create service with mock repository
-		tripService := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		tripService := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call service
 		trip, err := tripService.CreateTrip(ctx, userID, input)
@@ -117,15 +327,16 @@ func TestCreateTrip(t *testing.T) {
 		}
 
 		// Mock repository that should not be called
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			CreateTripFn: func(ctx context.Context, uid uuid.UUID, inp models.CreateTripInput) (*models.Trip, error) {
 				t.Error("Repository should not be called for invalid date range")
 				return nil, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		// Create service with mock repository
-		tripService := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		tripService := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call service
 		trip, err := tripService.CreateTrip(ctx, userID, input)
@@ -167,7 +378,7 @@ func TestCreateTrip(t *testing.T) {
 		}
 
 		// Mock repository
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			CreateTripFn: func(ctx context.Context, uid uuid.UUID, inp models.CreateTripInput) (*models.Trip, error) {
 				if inp.Name != "Trip to Paris" {
 					t.Errorf("Expected auto-generated name 'Trip to Paris', got '%s'", inp.Name)
@@ -175,9 +386,10 @@ func TestCreateTrip(t *testing.T) {
 				return expectedTrip, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		// Create service with mock repository
-		tripService := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		tripService := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call service
 		trip, err := tripService.CreateTrip(ctx, userID, input)
@@ -203,14 +415,15 @@ func TestCreateTrip(t *testing.T) {
 		}
 
 		// Mock repository
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			CreateTripFn: func(ctx context.Context, uid uuid.UUID, inp models.CreateTripInput) (*models.Trip, error) {
 				return nil, errors.New("database error")
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		// Create service with mock repository
-		tripService := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		tripService := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call service
 		trip, err := tripService.CreateTrip(ctx, userID, input)
@@ -237,13 +450,15 @@ func TestGetTripByID(t *testing.T) {
 	anotherUserID := uuid.New()
 
 	t.Run("Trip Not Found", func(t *testing.T) {
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return nil, errors.New("trip not found")
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call the service method
 		trip, err := service.GetTripByID(ctx, tripID, userID)
@@ -258,7 +473,7 @@ func TestGetTripByID(t *testing.T) {
 	})
 
 	t.Run("Unauthorized Access", func(t *testing.T) {
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:     tripID,
@@ -266,8 +481,10 @@ func TestGetTripByID(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call the service method
 		trip, err := service.GetTripByID(ctx, tripID, userID)
@@ -290,13 +507,16 @@ func TestUpdateTrip(t *testing.T) {
 
 	t.Run("Trip Not Found", func(t *testing.T) {
 		// Setup mock repository
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return nil, errors.New("trip not found")
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
 		updateInput := models.UpdateTripInput{
 			Name: stringPtr("Updated Trip"),
 		}
@@ -315,7 +535,7 @@ func TestUpdateTrip(t *testing.T) {
 
 	t.Run("Unauthorized Access", func(t *testing.T) {
 		// Setup mock repository
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:          tripID,
@@ -328,8 +548,11 @@ func TestUpdateTrip(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
 		updateInput := models.UpdateTripInput{
 			Name: stringPtr("Updated Trip"),
 		}
@@ -348,7 +571,7 @@ func TestUpdateTrip(t *testing.T) {
 
 	t.Run("Invalid Date Range - Both Dates", func(t *testing.T) {
 		// Setup mock repository
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:          tripID,
@@ -361,8 +584,10 @@ func TestUpdateTrip(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		futureDate := time.Now().Add(48 * time.Hour)
 		pastDate := time.Now().Add(24 * time.Hour)
@@ -386,7 +611,7 @@ func TestUpdateTrip(t *testing.T) {
 	t.Run("Invalid Date Range - StartDate Only", func(t *testing.T) {
 		// Setup mock repository
 		now := time.Now()
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:          tripID,
@@ -399,8 +624,10 @@ func TestUpdateTrip(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// New start date is after the existing end date
 		newStartDate := now.Add(48 * time.Hour)
@@ -423,7 +650,7 @@ func TestUpdateTrip(t *testing.T) {
 	t.Run("Invalid Date Range - EndDate Only", func(t *testing.T) {
 		// Setup mock repository
 		now := time.Now()
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:          tripID,
@@ -436,8 +663,10 @@ func TestUpdateTrip(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// New end date is before the existing start date
 		newEndDate := now.Add(24 * time.Hour)
@@ -480,7 +709,7 @@ func TestUpdateTrip(t *testing.T) {
 			Destination: "Updated City",
 		}
 
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return originalTrip, nil
 			},
@@ -488,8 +717,10 @@ func TestUpdateTrip(t *testing.T) {
 				return updatedTrip, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		updateInput := models.UpdateTripInput{
 			Name:        stringPtr("Updated Trip"),
@@ -523,11 +754,27 @@ func TestDeleteTrip(t *testing.T) {
 	anotherUserID := uuid.New()
 
 	t.Run("Trip Not Found", func(t *testing.T) {
-		// Already covered by existing test
+		mockTripRepo := &MockTripRepository{
+			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
+				return nil, errors.New("trip not found")
+			},
+		}
+		mockUserRepo := &MockUserRepository{}
+
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
+
+		// Call the service method
+		err := service.DeleteTrip(ctx, tripID, userID)
+
+		// Verify results
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
 	})
 
 	t.Run("Unauthorized Access", func(t *testing.T) {
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:     tripID,
@@ -535,8 +782,10 @@ func TestDeleteTrip(t *testing.T) {
 				}, nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call the service method
 		err := service.DeleteTrip(ctx, tripID, userID)
@@ -548,7 +797,7 @@ func TestDeleteTrip(t *testing.T) {
 	})
 
 	t.Run("Successful Delete", func(t *testing.T) {
-		mockRepo := &MockTripRepository{
+		mockTripRepo := &MockTripRepository{
 			GetTripByIDFn: func(ctx context.Context, id uuid.UUID) (*models.Trip, error) {
 				return &models.Trip{
 					ID:     tripID,
@@ -559,8 +808,10 @@ func TestDeleteTrip(t *testing.T) {
 				return nil
 			},
 		}
+		mockUserRepo := &MockUserRepository{}
 
-		service := services.NewTripService(mockRepo)
+		// Updated constructor call with both repositories
+		service := services.NewTripService(mockTripRepo, mockUserRepo)
 
 		// Call the service method
 		err := service.DeleteTrip(ctx, tripID, userID)

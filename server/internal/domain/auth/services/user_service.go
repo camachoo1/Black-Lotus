@@ -7,16 +7,18 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"black-lotus/internal/domain/auth/repositories"
+	authRepositories "black-lotus/internal/domain/auth/repositories"
+	tripRepositories "black-lotus/internal/domain/trip/repositories"
 	"black-lotus/internal/models"
 )
 
 type UserService struct {
-	userRepo repositories.UserRepositoryInterface
+	userRepo authRepositories.UserRepositoryInterface
+	tripRepo tripRepositories.TripRepositoryInterface
 }
 
-func NewUserService(userRepo repositories.UserRepositoryInterface) *UserService {
-	return &UserService{userRepo: userRepo}
+func NewUserService(userRepo authRepositories.UserRepositoryInterface, tripRepo tripRepositories.TripRepositoryInterface) *UserService {
+	return &UserService{userRepo: userRepo, tripRepo: tripRepo}
 }
 
 func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInput) (*models.User, error) {
@@ -80,6 +82,32 @@ func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*model
 
 	// Don't return the hashed password
 	user.HashedPassword = nil
+
+	return user, nil
+}
+
+/*
+GetUserWithTrips fetches a user and their trips
+With primary focus being on Trip domain - i.e. trip summary dashboard would require minimal user info
+*/
+func (s *UserService) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error) {
+	// Get the user
+	user, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Don't return the hashed password
+	user.HashedPassword = nil
+
+	// Get the user's trips
+	trips, err := s.tripRepo.GetTripsByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	// Attach trips to user
+	user.Trips = trips
 
 	return user, nil
 }

@@ -5,19 +5,21 @@ import (
 
 	controllers "black-lotus/internal/api/controllers/auth"
 	"black-lotus/internal/api/middleware"
-	"black-lotus/internal/domain/auth/repositories"
+	authRepository "black-lotus/internal/domain/auth/repositories"
 	"black-lotus/internal/domain/auth/services"
+	tripRepository "black-lotus/internal/domain/trip/repositories"
 	"black-lotus/pkg/db"
 )
 
 func AuthRoutes(e *echo.Echo) {
 	// Create repositories
-	userRepo := repositories.NewUserRepository(db.DB)
-	sessionRepo := repositories.NewSessionRepository(db.DB)
-	oauthRepo := repositories.NewOAuthRepository((db.DB))
+	userRepo := authRepository.NewUserRepository(db.DB)
+	sessionRepo := authRepository.NewSessionRepository(db.DB)
+	oauthRepo := authRepository.NewOAuthRepository(db.DB)
+	tripRepo := tripRepository.NewTripRepository(db.DB)
 
 	// Create services
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, tripRepo)
 	sessionService := services.NewSessionService(sessionRepo)
 	oauthService := services.NewOAuthService(oauthRepo, userRepo)
 

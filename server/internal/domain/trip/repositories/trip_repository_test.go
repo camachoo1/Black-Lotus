@@ -397,3 +397,72 @@ func TestGetTripsByUserID(t *testing.T) {
 		}
 	})
 }
+
+func TestGetTripWithUser(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	userID := createTestUser(t)
+	repo := repositories.NewTripRepository(db.TestDB)
+
+	// First create a trip to test with
+	input := models.CreateTripInput{
+		Name:        "Test Trip",
+		Description: "A test trip",
+		StartDate:   time.Now().Add(24 * time.Hour),
+		EndDate:     time.Now().Add(7 * 24 * time.Hour),
+		Destination: "Test City",
+	}
+
+	createdTrip, err := repo.CreateTrip(context.Background(), userID, input)
+	if err != nil {
+		t.Fatalf("Should create trip without error: %v", err)
+	}
+
+	// Test case: Get trip with user
+	t.Run("Get Trip With User", func(t *testing.T) {
+		trip, err := repo.GetTripWithUser(context.Background(), createdTrip.ID)
+		if err != nil {
+			t.Fatalf("Should get trip with user without error: %v", err)
+		}
+
+		if trip == nil {
+			t.Fatal("Trip should not be nil")
+		}
+
+		if trip.ID != createdTrip.ID {
+			t.Errorf("Trip ID should be %s, got %s", createdTrip.ID, trip.ID)
+		}
+
+		if trip.UserID != userID {
+			t.Errorf("User ID should be %s, got %s", userID, trip.UserID)
+		}
+
+		// Verify the User field is populated
+		if trip.User == nil {
+			t.Error("User field should be populated")
+		}
+
+		if trip.User != nil && trip.User.ID != userID {
+			t.Errorf("User ID in User field should be %s, got %s", userID, trip.User.ID)
+		}
+
+		if trip.User != nil && trip.User.Name != "Test User" {
+			t.Errorf("User name should be 'Test User', got %s", trip.User.Name)
+		}
+	})
+
+	// Test case: Non-existent trip
+	t.Run("Non-existent Trip With User", func(t *testing.T) {
+		nonExistentID := uuid.New()
+		trip, err := repo.GetTripWithUser(context.Background(), nonExistentID)
+
+		if err == nil {
+			t.Error("Should return error for non-existent trip")
+		}
+
+		if trip != nil {
+			t.Error("Trip should be nil")
+		}
+	})
+}

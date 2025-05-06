@@ -14,6 +14,7 @@ type User struct {
 	EmailVerified  bool      `json:"email_verified" default:"false"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	Trips          []*Trip   `json:"trips,omitempty"`
 }
 
 type CreateUserInput struct {

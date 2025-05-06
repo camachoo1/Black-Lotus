@@ -55,9 +55,9 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">black-lotus/internal/domain/trip/repositories/trip_repository.go (81.0%)</option>
+				<option value="file0">black-lotus/internal/domain/trip/repositories/trip_repository.go (82.4%)</option>
 				
-				<option value="file1">black-lotus/internal/domain/trip/services/trip_service.go (94.1%)</option>
+				<option value="file1">black-lotus/internal/domain/trip/services/trip_service.go (95.8%)</option>
 				
 				</select>
 			</div>
@@ -97,6 +97,7 @@ type TripRepositoryInterface interface {
         UpdateTrip(ctx context.Context, tripID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error)
         DeleteTrip(ctx context.Context, tripID uuid.UUID) error
         GetTripsByUserID(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*models.Trip, error)
+        GetTripWithUser(ctx context.Context, tripID uuid.UUID) (*models.Trip, error)
 }
 
 func NewTripRepository(db *pgxpool.Pool) *TripRepository <span class="cov8" title="1">{
@@ -275,6 +276,38 @@ func (r *TripRepository) GetTripsByUserID(ctx context.Context, userID uuid.UUID,
 
         <span class="cov8" title="1">return trips, nil</span>
 }
+
+// GetTripWithUser retrieves a trip and its user in a single operation
+func (r *TripRepository) GetTripWithUser(ctx context.Context, tripID uuid.UUID) (*models.Trip, error) <span class="cov8" title="1">{
+        // Get the trip first
+        trip, err := r.GetTripByID(ctx, tripID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Then get the user
+        <span class="cov8" title="1">user := new(models.User)
+        err = r.db.QueryRow(ctx, `
+        SELECT id, name, email, email_verified, created_at, updated_at
+        FROM users
+        WHERE id = $1
+    `, trip.UserID).Scan(
+                &amp;user.ID,
+                &amp;user.Name,
+                &amp;user.Email,
+                &amp;user.EmailVerified,
+                &amp;user.CreatedAt,
+                &amp;user.UpdatedAt,
+        )
+
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Don't include password in the user object
+        <span class="cov8" title="1">trip.User = user
+        return trip, nil</span>
+}
 </pre>
 		
 		<pre class="file" id="file1" style="display: none">package services
@@ -286,7 +319,8 @@ import (
 
         "github.com/google/uuid"
 
-        "black-lotus/internal/domain/trip/repositories"
+        authRepository "black-lotus/internal/domain/auth/repositories"
+        tripRepository "black-lotus/internal/domain/trip/repositories"
         "black-lotus/internal/models"
 )
 
@@ -295,11 +329,12 @@ import (
 IMPLEMENTED FOR TESTING PURPOSES
 */
 type TripService struct {
-        tripRepo repositories.TripRepositoryInterface
+        tripRepo tripRepository.TripRepositoryInterface
+        userRepo authRepository.UserRepositoryInterface
 }
 
-func NewTripService(tripRepo repositories.TripRepositoryInterface) *TripService <span class="cov8" title="1">{
-        return &amp;TripService{tripRepo: tripRepo}
+func NewTripService(tripRepo tripRepository.TripRepositoryInterface, userRepo authRepository.UserRepositoryInterface) *TripService <span class="cov8" title="1">{
+        return &amp;TripService{tripRepo: tripRepo, userRepo: userRepo}
 }</span>
 
 func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error) <span class="cov8" title="1">{
@@ -356,7 +391,7 @@ func (s *TripService) UpdateTrip(ctx context.Context, tripID uuid.UUID, userID u
 func (s *TripService) DeleteTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) error <span class="cov8" title="1">{
         // Verify ownership of the trip
         trip, err := s.tripRepo.GetTripByID(ctx, tripID)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return err
         }</span>
 
@@ -380,6 +415,38 @@ func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID 
         }</span>
 
         <span class="cov0" title="0">return trip, nil</span>
+}
+
+func (s *TripService) GetTripWithUser(ctx context.Context, tripID uuid.UUID, requestUserID uuid.UUID) (*models.Trip, error) <span class="cov8" title="1">{
+        trip, err := s.tripRepo.GetTripWithUser(ctx, tripID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Verify the requesting user has permission to see this trip
+        <span class="cov8" title="1">if trip.UserID != requestUserID </span><span class="cov8" title="1">{
+                return nil, errors.New("unauthorized access to trip")
+        }</span>
+
+        <span class="cov8" title="1">return trip, nil</span>
+}
+
+func (s *TripService) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error) <span class="cov8" title="1">{
+        // First, verify the user exists
+        user, err := s.userRepo.GetUserByID(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Then get their trips
+        <span class="cov8" title="1">trips, err := s.tripRepo.GetTripsByUserID(ctx, userID, limit, offset)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Attach trips to user
+        <span class="cov8" title="1">user.Trips = trips
+        return user, nil</span>
 }
 </pre>
 		

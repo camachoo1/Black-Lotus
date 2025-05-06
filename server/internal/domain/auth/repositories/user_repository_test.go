@@ -3,13 +3,16 @@ package repositories_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"black-lotus/internal/domain/auth/repositories"
+	authRepository "black-lotus/internal/domain/auth/repositories"
+	tripRepository "black-lotus/internal/domain/trip/repositories"
 	"black-lotus/internal/models"
 	"black-lotus/pkg/db"
 )
@@ -36,7 +39,7 @@ func TestCreateUser(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)
 
-	repo := repositories.NewUserRepository(db.TestDB)
+	repo := authRepository.NewUserRepository(db.TestDB)
 
 	t.Run("Valid User Creation", func(t *testing.T) {
 		input := models.CreateUserInput{
@@ -124,7 +127,7 @@ func TestLoginUser(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)
 
-	repo := repositories.NewUserRepository(db.TestDB)
+	repo := authRepository.NewUserRepository(db.TestDB)
 
 	t.Run("User Not Found", func(t *testing.T) {
 		loginInput := models.LoginUserInput{
@@ -237,7 +240,7 @@ func TestGetUserByID(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)
 
-	repo := repositories.NewUserRepository(db.TestDB)
+	repo := authRepository.NewUserRepository(db.TestDB)
 
 	// Create a user first
 	input := models.CreateUserInput{
@@ -299,7 +302,7 @@ func TestGetUserByEmail(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)
 
-	repo := repositories.NewUserRepository(db.TestDB)
+	repo := authRepository.NewUserRepository(db.TestDB)
 
 	// Create a user first
 	input := models.CreateUserInput{
@@ -361,4 +364,193 @@ func stringPtr(s string) *string {
 // Helper to check if an error is pgx.ErrNoRows
 func isPgxNoRows(err error) bool {
 	return err != nil && errors.Is(err, pgx.ErrNoRows)
+}
+
+func TestGetUserWithTrips(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	repo := authRepository.NewUserRepository(db.TestDB)
+	tripRepo := tripRepository.NewTripRepository(db.TestDB)
+
+	// Create a user first
+	input := models.CreateUserInput{
+		Name:     "User With Trips",
+		Email:    "userwithtrips@example.com",
+		Password: stringPtr("Password123!"),
+	}
+
+	hashedPassword := "hashed_password"
+
+	user, err := repo.CreateUser(context.Background(), input, &hashedPassword)
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create several trips for this user
+	for i := 0; i < 5; i++ {
+		tripInput := models.CreateTripInput{
+			Name:        fmt.Sprintf("Trip %d", i+1),
+			Description: fmt.Sprintf("Description for trip %d", i+1),
+			StartDate:   time.Now().Add(time.Duration(i*24) * time.Hour),
+			EndDate:     time.Now().Add(time.Duration((i+7)*24) * time.Hour),
+			Destination: fmt.Sprintf("Destination %d", i+1),
+		}
+
+		_, err := tripRepo.CreateTrip(context.Background(), user.ID, tripInput)
+		if err != nil {
+			t.Fatalf("Failed to create test trip: %v", err)
+		}
+	}
+
+	t.Run("Get User With All Trips", func(t *testing.T) {
+		userWithTrips, err := repo.GetUserWithTrips(context.Background(), user.ID, 10, 0)
+		if err != nil {
+			t.Fatalf("Expected no error, got: %v", err)
+		}
+
+		if userWithTrips == nil {
+			t.Fatal("Expected user to be returned, got nil")
+		}
+
+		if userWithTrips.ID != user.ID {
+			t.Errorf("Expected user ID %s, got %s", user.ID, userWithTrips.ID)
+		}
+
+		if userWithTrips.Trips == nil {
+			t.Fatal("Expected trips to be populated, got nil")
+		}
+
+		if len(userWithTrips.Trips) != 5 {
+			t.Errorf("Expected 5 trips, got %d", len(userWithTrips.Trips))
+		}
+
+		// Instead of checking order, just verify that all trip names exist
+		tripNames := make(map[string]bool)
+		for i := 1; i <= 5; i++ {
+			tripNames[fmt.Sprintf("Trip %d", i)] = false
+		}
+
+		// Verify each trip belongs to the user and mark the name as found
+		for _, trip := range userWithTrips.Trips {
+			if trip.UserID != user.ID {
+				t.Errorf("Trip %s: expected user ID %s, got %s", trip.Name, user.ID, trip.UserID)
+			}
+
+			// Mark this trip name as found
+			if _, exists := tripNames[trip.Name]; exists {
+				tripNames[trip.Name] = true
+			} else {
+				t.Errorf("Unexpected trip name: %s", trip.Name)
+			}
+		}
+
+		// Verify all expected trip names were found
+		for name, found := range tripNames {
+			if !found {
+				t.Errorf("Expected trip '%s' was not found", name)
+			}
+		}
+	})
+
+	t.Run("Test Pagination", func(t *testing.T) {
+		// Get first page with 2 trips
+		userWithTripsPage1, err := repo.GetUserWithTrips(context.Background(), user.ID, 2, 0)
+		if err != nil {
+			t.Fatalf("Expected no error on page 1, got: %v", err)
+		}
+
+		if len(userWithTripsPage1.Trips) != 2 {
+			t.Errorf("Expected 2 trips on page 1, got %d", len(userWithTripsPage1.Trips))
+		}
+
+		// Get second page with 2 trips
+		userWithTripsPage2, err := repo.GetUserWithTrips(context.Background(), user.ID, 2, 2)
+		if err != nil {
+			t.Fatalf("Expected no error on page 2, got: %v", err)
+		}
+
+		if len(userWithTripsPage2.Trips) != 2 {
+			t.Errorf("Expected 2 trips on page 2, got %d", len(userWithTripsPage2.Trips))
+		}
+
+		// Get third page with remaining 1 trip
+		userWithTripsPage3, err := repo.GetUserWithTrips(context.Background(), user.ID, 2, 4)
+		if err != nil {
+			t.Fatalf("Expected no error on page 3, got: %v", err)
+		}
+
+		if len(userWithTripsPage3.Trips) != 1 {
+			t.Errorf("Expected 1 trip on page 3, got %d", len(userWithTripsPage3.Trips))
+		}
+
+		// Ensure all trips across pages are unique
+		tripIDs := make(map[uuid.UUID]bool)
+
+		for _, trip := range userWithTripsPage1.Trips {
+			tripIDs[trip.ID] = true
+		}
+
+		for _, trip := range userWithTripsPage2.Trips {
+			if tripIDs[trip.ID] {
+				t.Errorf("Trip ID %s appears in multiple pages", trip.ID)
+			}
+			tripIDs[trip.ID] = true
+		}
+
+		for _, trip := range userWithTripsPage3.Trips {
+			if tripIDs[trip.ID] {
+				t.Errorf("Trip ID %s appears in multiple pages", trip.ID)
+			}
+			tripIDs[trip.ID] = true
+		}
+
+		if len(tripIDs) != 5 {
+			t.Errorf("Expected 5 unique trip IDs across all pages, got %d", len(tripIDs))
+		}
+	})
+
+	t.Run("Non-existent User", func(t *testing.T) {
+		nonExistentID := uuid.New()
+		userWithTrips, err := repo.GetUserWithTrips(context.Background(), nonExistentID, 10, 0)
+
+		if err == nil {
+			t.Error("Expected error for non-existent user, got nil")
+		}
+
+		if userWithTrips != nil {
+			t.Errorf("Expected nil user, got: %v", userWithTrips)
+		}
+	})
+
+	t.Run("User With No Trips", func(t *testing.T) {
+		// Create another user with no trips
+		emptyUserInput := models.CreateUserInput{
+			Name:     "User With No Trips",
+			Email:    "emptyuser@example.com",
+			Password: stringPtr("Password123!"),
+		}
+
+		emptyUser, err := repo.CreateUser(context.Background(), emptyUserInput, &hashedPassword)
+		if err != nil {
+			t.Fatalf("Failed to create empty user: %v", err)
+		}
+
+		userWithTrips, err := repo.GetUserWithTrips(context.Background(), emptyUser.ID, 10, 0)
+		if err != nil {
+			t.Fatalf("Expected no error for user with no trips, got: %v", err)
+		}
+
+		if userWithTrips == nil {
+			t.Fatal("Expected user to be returned, got nil")
+		}
+
+		if userWithTrips.Trips == nil {
+			t.Fatal("Expected empty trips array, got nil")
+		}
+
+		if len(userWithTrips.Trips) != 0 {
+			t.Errorf("Expected 0 trips, got %d", len(userWithTrips.Trips))
+		}
+	})
 }

@@ -24,6 +24,7 @@ type UserRepositoryInterface interface {
 	LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error)
 }
 
 func NewUserRepository(db *pgxpool.Pool) *UserRepository {
@@ -150,4 +151,59 @@ func (r *UserRepository) SetEmailVerified(ctx context.Context, userID uuid.UUID,
 	`, verified, userID)
 
 	return err
+}
+
+// GetUserWithTrips retrieves a user and their trips in a single operation
+func (r *UserRepository) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error) {
+	// First get the user
+	user, err := r.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set a reasonable default for limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Then get their trips
+	rows, err := r.db.Query(ctx, `
+        SELECT id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        FROM trips
+        WHERE user_id = $1
+        ORDER BY start_date DESC
+        LIMIT $2 OFFSET $3
+    `, userID, limit, offset)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	trips := []*models.Trip{}
+	for rows.Next() {
+		trip := new(models.Trip)
+		err := rows.Scan(
+			&trip.ID,
+			&trip.UserID,
+			&trip.Name,
+			&trip.Description,
+			&trip.StartDate,
+			&trip.EndDate,
+			&trip.Destination,
+			&trip.CreatedAt,
+			&trip.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		trips = append(trips, trip)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	user.Trips = trips
+	return user, nil
 }

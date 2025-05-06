@@ -7,7 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"black-lotus/internal/domain/trip/repositories"
+	authRepository "black-lotus/internal/domain/auth/repositories"
+	tripRepository "black-lotus/internal/domain/trip/repositories"
 	"black-lotus/internal/models"
 )
 
@@ -16,11 +17,12 @@ import (
 IMPLEMENTED FOR TESTING PURPOSES
 */
 type TripService struct {
-	tripRepo repositories.TripRepositoryInterface
+	tripRepo tripRepository.TripRepositoryInterface
+	userRepo authRepository.UserRepositoryInterface
 }
 
-func NewTripService(tripRepo repositories.TripRepositoryInterface) *TripService {
-	return &TripService{tripRepo: tripRepo}
+func NewTripService(tripRepo tripRepository.TripRepositoryInterface, userRepo authRepository.UserRepositoryInterface) *TripService {
+	return &TripService{tripRepo: tripRepo, userRepo: userRepo}
 }
 
 func (s *TripService) CreateTrip(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error) {
@@ -101,4 +103,36 @@ func (s *TripService) GetTripByID(ctx context.Context, tripID uuid.UUID, userID 
 	}
 
 	return trip, nil
+}
+
+func (s *TripService) GetTripWithUser(ctx context.Context, tripID uuid.UUID, requestUserID uuid.UUID) (*models.Trip, error) {
+	trip, err := s.tripRepo.GetTripWithUser(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify the requesting user has permission to see this trip
+	if trip.UserID != requestUserID {
+		return nil, errors.New("unauthorized access to trip")
+	}
+
+	return trip, nil
+}
+
+func (s *TripService) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error) {
+	// First, verify the user exists
+	user, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Then get their trips
+	trips, err := s.tripRepo.GetTripsByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	// Attach trips to user
+	user.Trips = trips
+	return user, nil
 }

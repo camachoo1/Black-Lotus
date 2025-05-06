@@ -59,13 +59,13 @@
 				
 				<option value="file1">black-lotus/internal/domain/auth/repositories/session_repository.go (94.9%)</option>
 				
-				<option value="file2">black-lotus/internal/domain/auth/repositories/user_repository.go (87.1%)</option>
+				<option value="file2">black-lotus/internal/domain/auth/repositories/user_repository.go (84.3%)</option>
 				
 				<option value="file3">black-lotus/internal/domain/auth/services/oauth_service.go (0.0%)</option>
 				
 				<option value="file4">black-lotus/internal/domain/auth/services/session_service.go (100.0%)</option>
 				
-				<option value="file5">black-lotus/internal/domain/auth/services/user_service.go (92.9%)</option>
+				<option value="file5">black-lotus/internal/domain/auth/services/user_service.go (94.6%)</option>
 				
 				<option value="file6">black-lotus/internal/domain/auth/validators/auth_validators.go (80.0%)</option>
 				
@@ -443,6 +443,7 @@ type UserRepositoryInterface interface {
         LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
         GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
         GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+        GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error)
 }
 
 func NewUserRepository(db *pgxpool.Pool) *UserRepository <span class="cov8" title="1">{
@@ -570,6 +571,61 @@ func (r *UserRepository) SetEmailVerified(ctx context.Context, userID uuid.UUID,
 
         return err
 }</span>
+
+// GetUserWithTrips retrieves a user and their trips in a single operation
+func (r *UserRepository) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error) <span class="cov8" title="1">{
+        // First get the user
+        user, err := r.GetUserByID(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Set a reasonable default for limit
+        <span class="cov8" title="1">if limit &lt;= 0 </span><span class="cov0" title="0">{
+                limit = 10
+        }</span>
+
+        // Then get their trips
+        <span class="cov8" title="1">rows, err := r.db.Query(ctx, `
+        SELECT id, user_id, name, description, start_date, end_date, destination, created_at, updated_at
+        FROM trips
+        WHERE user_id = $1
+        ORDER BY start_date DESC
+        LIMIT $2 OFFSET $3
+    `, userID, limit, offset)
+
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        trips := []*models.Trip{}
+        for rows.Next() </span><span class="cov8" title="1">{
+                trip := new(models.Trip)
+                err := rows.Scan(
+                        &amp;trip.ID,
+                        &amp;trip.UserID,
+                        &amp;trip.Name,
+                        &amp;trip.Description,
+                        &amp;trip.StartDate,
+                        &amp;trip.EndDate,
+                        &amp;trip.Destination,
+                        &amp;trip.CreatedAt,
+                        &amp;trip.UpdatedAt,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">trips = append(trips, trip)</span>
+        }
+
+        <span class="cov8" title="1">if err := rows.Err(); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">user.Trips = trips
+        return user, nil</span>
+}
 </pre>
 		
 		<pre class="file" id="file3" style="display: none">package services
@@ -1035,16 +1091,18 @@ import (
         "github.com/google/uuid"
         "golang.org/x/crypto/bcrypt"
 
-        "black-lotus/internal/domain/auth/repositories"
+        authRepositories "black-lotus/internal/domain/auth/repositories"
+        tripRepositories "black-lotus/internal/domain/trip/repositories"
         "black-lotus/internal/models"
 )
 
 type UserService struct {
-        userRepo repositories.UserRepositoryInterface
+        userRepo authRepositories.UserRepositoryInterface
+        tripRepo tripRepositories.TripRepositoryInterface
 }
 
-func NewUserService(userRepo repositories.UserRepositoryInterface) *UserService <span class="cov8" title="1">{
-        return &amp;UserService{userRepo: userRepo}
+func NewUserService(userRepo authRepositories.UserRepositoryInterface, tripRepo tripRepositories.TripRepositoryInterface) *UserService <span class="cov8" title="1">{
+        return &amp;UserService{userRepo: userRepo, tripRepo: tripRepo}
 }</span>
 
 func (s *UserService) CreateUser(ctx context.Context, input models.CreateUserInput) (*models.User, error) <span class="cov8" title="1">{
@@ -1108,6 +1166,32 @@ func (s *UserService) GetUserByID(ctx context.Context, userID uuid.UUID) (*model
 
         // Don't return the hashed password
         <span class="cov8" title="1">user.HashedPassword = nil
+
+        return user, nil</span>
+}
+
+/*
+GetUserWithTrips fetches a user and their trips
+With primary focus being on Trip domain - i.e. trip summary dashboard would require minimal user info
+*/
+func (s *UserService) GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error) <span class="cov8" title="1">{
+        // Get the user
+        user, err := s.userRepo.GetUserByID(ctx, userID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Don't return the hashed password
+        <span class="cov8" title="1">user.HashedPassword = nil
+
+        // Get the user's trips
+        trips, err := s.tripRepo.GetTripsByUserID(ctx, userID, limit, offset)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Attach trips to user
+        <span class="cov8" title="1">user.Trips = trips
 
         return user, nil</span>
 }

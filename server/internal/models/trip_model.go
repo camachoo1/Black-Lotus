@@ -7,9 +7,9 @@ import (
 )
 
 type Trip struct {
-	ID     uuid.UUID `json:"id"`
-	UserID uuid.UUID `json:"user_id"`
 	// Will generate default names for Trips in service file
+	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	StartDate   time.Time `json:"start_date" validate:"required"`
@@ -17,8 +17,7 @@ type Trip struct {
 	Destination string    `json:"destination" validate:"required"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-
-	// WILL NEED TO ADD RELATIONS AS FEATURES GET IMPLEMENTED
+	User        *User     `json:"-,omitempty"`
 }
 
 type CreateTripInput struct {

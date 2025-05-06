@@ -24,6 +24,7 @@ type TripRepositoryInterface interface {
 	UpdateTrip(ctx context.Context, tripID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error)
 	DeleteTrip(ctx context.Context, tripID uuid.UUID) error
 	GetTripsByUserID(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]*models.Trip, error)
+	GetTripWithUser(ctx context.Context, tripID uuid.UUID) (*models.Trip, error)
 }
 
 func NewTripRepository(db *pgxpool.Pool) *TripRepository {
@@ -201,4 +202,36 @@ func (r *TripRepository) GetTripsByUserID(ctx context.Context, userID uuid.UUID,
 	}
 
 	return trips, nil
+}
+
+// GetTripWithUser retrieves a trip and its user in a single operation
+func (r *TripRepository) GetTripWithUser(ctx context.Context, tripID uuid.UUID) (*models.Trip, error) {
+	// Get the trip first
+	trip, err := r.GetTripByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Then get the user
+	user := new(models.User)
+	err = r.db.QueryRow(ctx, `
+        SELECT id, name, email, email_verified, created_at, updated_at
+        FROM users
+        WHERE id = $1
+    `, trip.UserID).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.EmailVerified,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Don't include password in the user object
+	trip.User = user
+	return trip, nil
 }
