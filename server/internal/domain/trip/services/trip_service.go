@@ -16,6 +16,15 @@ import (
 *
 IMPLEMENTED FOR TESTING PURPOSES
 */
+type TripServiceInterface interface {
+	CreateTrip(ctx context.Context, userID uuid.UUID, input models.CreateTripInput) (*models.Trip, error)
+	UpdateTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID, input models.UpdateTripInput) (*models.Trip, error)
+	DeleteTrip(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) error
+	GetTripByID(ctx context.Context, tripID uuid.UUID, userID uuid.UUID) (*models.Trip, error)
+	GetTripWithUser(ctx context.Context, tripID uuid.UUID, requestUserID uuid.UUID) (*models.Trip, error)
+	GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error)
+	GetTripsByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.Trip, error)
+}
 type TripService struct {
 	tripRepo tripRepository.TripRepositoryInterface
 	userRepo authRepository.UserRepositoryInterface
@@ -135,4 +144,18 @@ func (s *TripService) GetUserWithTrips(ctx context.Context, userID uuid.UUID, li
 	// Attach trips to user
 	user.Trips = trips
 	return user, nil
+}
+
+func (s *TripService) GetTripsByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.Trip, error) {
+	_, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	trips, err := s.tripRepo.GetTripsByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return trips, nil
 }
