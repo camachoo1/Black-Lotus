@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"black-lotus/api"
-	"black-lotus/db"
+	"black-lotus/internal/api"
+	"black-lotus/pkg/db"
 )
 
 func main() {
