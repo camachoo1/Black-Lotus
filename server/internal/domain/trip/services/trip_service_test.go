@@ -78,6 +78,10 @@ func (m *MockUserRepository) GetUserWithTrips(ctx context.Context, userID uuid.U
 	return nil, errors.New("GetUserWithTrips not implemented")
 }
 
+func (m *MockUserRepository) SetEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	return errors.New("SetEmailVerified not implemented")
+}
+
 // Helper functions for creating pointers
 func stringPtr(s string) *string {
 	return &s

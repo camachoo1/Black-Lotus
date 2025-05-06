@@ -22,6 +22,7 @@ IMPLEMENTED FOR TESTING PURPOSES
 type UserRepositoryInterface interface {
 	CreateUser(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error)
 	LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
+	SetEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit int, offset int) (*models.User, error)

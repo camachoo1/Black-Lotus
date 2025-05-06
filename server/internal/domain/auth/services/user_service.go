@@ -17,6 +17,13 @@ type UserService struct {
 	tripRepo tripRepositories.TripRepositoryInterface
 }
 
+type UserServiceInterface interface {
+	CreateUser(ctx context.Context, input models.CreateUserInput) (*models.User, error)
+	LoginUser(ctx context.Context, input models.LoginUserInput) (*models.User, error)
+	GetUserByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
+	GetUserWithTrips(ctx context.Context, userID uuid.UUID, limit, offset int) (*models.User, error)
+}
+
 func NewUserService(userRepo authRepositories.UserRepositoryInterface, tripRepo tripRepositories.TripRepositoryInterface) *UserService {
 	return &UserService{userRepo: userRepo, tripRepo: tripRepo}
 }

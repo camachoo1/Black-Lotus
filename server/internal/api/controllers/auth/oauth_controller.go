@@ -11,14 +11,21 @@ import (
 	"black-lotus/internal/domain/auth/services"
 )
 
+type OAuthControllerInterface interface {
+	GetGitHubAuthURL(ctx echo.Context) error
+	HandleGitHubCallback(ctx echo.Context) error
+	GetGoogleAuthURL(ctx echo.Context) error
+	HandleGoogleCallback(ctx echo.Context) error
+}
+
 // OAuthController handles OAuth authentication endpoints
 type OAuthController struct {
-	oauthService   *services.OAuthService
-	sessionService *services.SessionService
+	oauthService   services.OAuthServiceInterface
+	sessionService services.SessionServiceInterface
 }
 
 // NewOAuthController creates a new OAuth controller
-func NewOAuthController(oauthService *services.OAuthService, sessionService *services.SessionService) *OAuthController {
+func NewOAuthController(oauthService services.OAuthServiceInterface, sessionService services.SessionServiceInterface) *OAuthController {
 	return &OAuthController{
 		oauthService:   oauthService,
 		sessionService: sessionService,

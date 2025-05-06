@@ -17,12 +17,22 @@ import (
 )
 
 type UserController struct {
-	userService    *services.UserService
-	sessionService *services.SessionService
+	userService    services.UserServiceInterface
+	sessionService services.SessionServiceInterface
 	validator      *validator.Validate
 }
 
-func NewUserController(userService *services.UserService, sessionService *services.SessionService) *UserController {
+type UserControllerInterface interface {
+	RegisterUser(ctx echo.Context) error
+	LoginUser(ctx echo.Context) error
+	LogoutUser(ctx echo.Context) error
+	RefreshToken(ctx echo.Context) error
+	GetUserProfile(ctx echo.Context) error
+	GetCSRFToken(ctx echo.Context) error
+	GetUserProfileWithTrips(ctx echo.Context) error
+}
+
+func NewUserController(userService services.UserServiceInterface, sessionService services.SessionServiceInterface) *UserController {
 	validate := validator.New()
 
 	// This is critical - register struct-level validation

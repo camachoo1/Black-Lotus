@@ -15,10 +15,16 @@ import (
 	"black-lotus/internal/models"
 )
 
+type OAuthServiceInterface interface {
+	GetAuthorizationURL(provider string, redirectURI string, state string) string
+	AuthenticateGitHub(ctx context.Context, code string) (*models.User, error)
+	AuthenticateGoogle(ctx context.Context, code string, redirectURI string) (*models.User, error)
+}
+
 // OAuthService handles authentication with OAuth providers
 type OAuthService struct {
-	oauthRepo  *repositories.OAuthRepository
-	userRepo   *repositories.UserRepository
+	oauthRepo  repositories.OAuthRepositoryInterface
+	userRepo   repositories.UserRepositoryInterface
 	httpClient *http.Client
 }
 
@@ -64,8 +70,8 @@ type googleUserResponse struct {
 
 // NewOAuthService creates a new OAuth service
 func NewOAuthService(
-	oauthRepo *repositories.OAuthRepository,
-	userRepo *repositories.UserRepository,
+	oauthRepo repositories.OAuthRepositoryInterface,
+	userRepo repositories.UserRepositoryInterface,
 ) *OAuthService {
 	return &OAuthService{
 		oauthRepo:  oauthRepo,

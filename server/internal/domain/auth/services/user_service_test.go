@@ -14,11 +14,13 @@ import (
 
 // MockUserRepository is a mock implementation of UserRepository for testing
 type MockUserRepository struct {
-	users           map[string]*models.User    // map of email to user
-	usersByID       map[uuid.UUID]*models.User // map of ID to user
-	createUserFunc  func(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error)
-	loginUserFunc   func(ctx context.Context, input models.LoginUserInput) (*models.User, error)
-	getUserByIDFunc func(ctx context.Context, userID uuid.UUID) (*models.User, error)
+	users                map[string]*models.User    // map of email to user
+	usersByID            map[uuid.UUID]*models.User // map of ID to user
+	createUserFunc       func(ctx context.Context, input models.CreateUserInput, hashedPassword *string) (*models.User, error)
+	loginUserFunc        func(ctx context.Context, input models.LoginUserInput) (*models.User, error)
+	setEmailVerifiedFunc func(ctx context.Context, userID uuid.UUID, verified bool) error
+	getUserByIDFunc      func(ctx context.Context, userID uuid.UUID) (*models.User, error)
+	getUserByEmailFunc   func(ctx context.Context, email string) (*models.User, error)
 }
 
 // NewMockUserRepository creates a new mock repository
@@ -79,6 +81,24 @@ func (m *MockUserRepository) LoginUser(ctx context.Context, input models.LoginUs
 	}
 
 	return user, nil
+}
+
+func (m *MockUserRepository) SetEmailVerified(ctx context.Context, userID uuid.UUID, verified bool) error {
+	if m.setEmailVerifiedFunc != nil {
+		return m.setEmailVerifiedFunc(ctx, userID, verified)
+	}
+
+	user, exists := m.usersByID[userID]
+	if !exists {
+		return errors.New("user not found")
+	}
+
+	if !user.EmailVerified {
+		verified = true
+	} else {
+		return errors.New("user already verified")
+	}
+	return nil
 }
 
 // GetUserByID mocks the repository's GetUserByID method

@@ -14,6 +14,12 @@ type OAuthRepository struct {
 	db *pgxpool.Pool
 }
 
+type OAuthRepositoryInterface interface {
+	CreateOAuthAccount(ctx context.Context, account models.OAuthAccount) error
+	GetOAuthAccount(ctx context.Context, providerID, providerUserID string) (*models.OAuthAccount, error)
+	GetUserOAuthAccounts(ctx context.Context, userID uuid.UUID) ([]*models.OAuthAccount, error)
+}
+
 // NewOAuthRepository creates a new repository with database connection
 func NewOAuthRepository(db *pgxpool.Pool) *OAuthRepository {
 	return &OAuthRepository{db: db}

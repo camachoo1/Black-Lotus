@@ -10,6 +10,16 @@ import (
 	"black-lotus/internal/models"
 )
 
+type SessionServiceInterface interface {
+	CreateSession(ctx context.Context, userID uuid.UUID) (*models.Session, error)
+	ValidateAccessToken(ctx context.Context, token string) (*models.Session, error)
+	ValidateRefreshToken(ctx context.Context, token string) (*models.Session, error)
+	RefreshAccessToken(ctx context.Context, refreshToken string) (*models.Session, error)
+	EndSessionByAccessToken(ctx context.Context, token string) error
+	EndSessionByRefreshToken(ctx context.Context, token string) error
+	EndAllUserSessions(ctx context.Context, userID uuid.UUID) error
+}
+
 // SessionService coordinates business logic for session management
 type SessionService struct {
 	sessionRepo repositories.SessionRepositoryInterface
