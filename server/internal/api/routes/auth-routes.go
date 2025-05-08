@@ -1,49 +1,75 @@
+// server/internal/api/routes/auth_routes.go
 package routes
 
 import (
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 
-	controllers "black-lotus/internal/api/controllers/auth"
-	"black-lotus/internal/api/middleware"
-	authRepository "black-lotus/internal/domain/auth/repositories"
-	"black-lotus/internal/domain/auth/services"
-	tripRepository "black-lotus/internal/domain/trip/repositories"
+	"black-lotus/internal/common/middleware"
+	"black-lotus/internal/features/auth/login"
+	"black-lotus/internal/features/auth/oauth"
+	"black-lotus/internal/features/auth/oauth/github"
+	"black-lotus/internal/features/auth/oauth/google"
+	"black-lotus/internal/features/auth/register"
+	"black-lotus/internal/features/auth/session"
+	"black-lotus/internal/features/auth/user"
+	"black-lotus/internal/features/profiles/view"
+	"black-lotus/internal/infrastructure/repositories"
 	"black-lotus/pkg/db"
 )
 
-func AuthRoutes(e *echo.Echo) {
-	// Create repositories
-	userRepo := authRepository.NewUserRepository(db.DB)
-	sessionRepo := authRepository.NewSessionRepository(db.DB)
-	oauthRepo := authRepository.NewOAuthRepository(db.DB)
-	tripRepo := tripRepository.NewTripRepository(db.DB)
+// RegisterAuthRoutes registers all authentication-related routes
+func RegisterAuthRoutes(e *echo.Echo, validator *validator.Validate) {
+	// Create repositories - these implement all the feature-specific interfaces
+	userRepo := repositories.NewUserRepository(db.DB)
+	sessionRepo := repositories.NewSessionRepository(db.DB)
+	oauthRepo := repositories.NewOAuthRepository(db.DB)
 
-	// Create services
-	userService := services.NewUserService(userRepo, tripRepo)
-	sessionService := services.NewSessionService(sessionRepo)
-	oauthService := services.NewOAuthService(oauthRepo, userRepo)
+	// Create session service (used by multiple features)
+	sessionService := session.NewService(sessionRepo)
 
-	// Create controllers
-	userController := controllers.NewUserController(userService, sessionService)
-	oauthController := controllers.NewOAuthController(oauthService, sessionService)
+	// Create feature-specific services
+	loginService := login.NewService(userRepo)
+	registerService := register.NewService(userRepo)
+	userService := user.NewService(userRepo)
+	profileService := view.NewService(userRepo)
 
-	// Create auth middlewares
+	// Create OAuth provider services
+	githubService := github.NewService(oauthRepo, userRepo)
+	googleService := google.NewService(oauthRepo, userRepo)
+
+	// Create provider-specific handlers
+	githubHandler := github.NewHandler(githubService, sessionService)
+	googleHandler := google.NewHandler(googleService, sessionService)
+
+	// Create feature-specific handlers
+	loginHandler := login.NewHandler(loginService, sessionService, validator)
+	registerHandler := register.NewHandler(registerService, sessionService, validator)
+	userHandler := user.NewHandler(userService)
+	sessionHandler := session.NewHandler(sessionService)
+	profileHandler := view.NewHandler(profileService, sessionService)
+
+	// Create OAuth main handler that composes provider handlers
+	oauthHandler := oauth.NewHandler(githubHandler, googleHandler)
+
+	// Create auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(sessionService, userService)
 
 	// Public Routes
-	e.POST("/api/signup", userController.RegisterUser)
-	e.POST("/api/login", userController.LoginUser)
-	e.POST("/api/logout", userController.LogoutUser)
-	e.GET("/api/csrf-token", userController.GetCSRFToken)
+	e.POST("/api/signup", registerHandler.Register)
+	e.POST("/api/login", loginHandler.Login)
+	e.POST("/api/logout", sessionHandler.LogoutUser)
+	e.GET("/api/csrf-token", sessionHandler.GetCSRFToken)
 
 	// OAuth Routes
-	e.GET("/api/auth/github", oauthController.GetGitHubAuthURL)
-	e.GET("/api/auth/github/callback", oauthController.HandleGitHubCallback)
-	e.GET("/api/auth/google", oauthController.GetGoogleAuthURL)
-	e.GET("/api/auth/google/callback", oauthController.HandleGoogleCallback)
+	e.GET("/api/auth/github", oauthHandler.GetGitHubAuthURL)
+	e.GET("/api/auth/github/callback", oauthHandler.HandleGitHubCallback)
+	e.GET("/api/auth/google", oauthHandler.GetGoogleAuthURL)
+	e.GET("/api/auth/google/callback", oauthHandler.HandleGoogleCallback)
 
 	// Private Routes
 	protected := e.Group("/api")
 	protected.Use(authMiddleware.Authenticate)
-	protected.GET("/profile", userController.GetUserProfile)
+	protected.GET("/user/:id", userHandler.GetUserByID)
+	protected.GET("/profile", profileHandler.GetUserProfile)
 }

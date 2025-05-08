@@ -1,13 +1,17 @@
 package api
 
 import (
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 
 	"black-lotus/internal/api/routes"
+	validation "black-lotus/internal/common/validations"
 )
 
 func SetupRouter(e *echo.Echo) *echo.Echo {
-	routes.AuthRoutes(e)
+	v := validator.New()
+	validation.RegisterPasswordValidators(v)
+	routes.RegisterAuthRoutes(e, v)
 
 	// Test Routes
 	e.GET("/oauth-test", func(c echo.Context) error {
